@@ -19,6 +19,31 @@ type MediaRuntimeInfo = {
   libx265: boolean;
 };
 
+type ModelManifest = {
+  id: string;
+  display_name: string;
+  task: string;
+  engine: string;
+  scale: number;
+  content: string;
+  model_stem: string;
+  bundled: boolean;
+  license_status: string;
+};
+
+type BinaryProbe = {
+  name: string;
+  available: boolean;
+  detail: string | null;
+};
+
+type NcnnRuntimeInfo = {
+  realesrgan: BinaryProbe;
+  realcugan: BinaryProbe;
+  rife: BinaryProbe;
+  models: ModelManifest[];
+};
+
 type MediaProbe = {
   path: string;
   duration_seconds: number | null;
@@ -78,6 +103,7 @@ export default function App() {
   const [hardware, setHardware] = useState<HardwareInfo | null>(null);
   const [hardwareError, setHardwareError] = useState<string | null>(null);
   const [runtime, setRuntime] = useState<MediaRuntimeInfo | null>(null);
+  const [ncnnRuntime, setNcnnRuntime] = useState<NcnnRuntimeInfo | null>(null);
   const [media, setMedia] = useState<MediaProbe | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [probing, setProbing] = useState(false);
@@ -98,6 +124,9 @@ export default function App() {
     invoke<MediaRuntimeInfo>("detect_media_runtime")
       .then(setRuntime)
       .catch(() => setRuntime(null));
+    invoke<NcnnRuntimeInfo>("detect_ncnn_runtime")
+      .then(setNcnnRuntime)
+      .catch(() => setNcnnRuntime(null));
   }, []);
 
   useEffect(() => {
@@ -361,7 +390,7 @@ export default function App() {
 
           <div className="hardware-card">
             <div className="section-heading">
-              <span>Runtime</span>
+              <span>Media runtime</span>
               <small>{runtime?.ffmpeg_available ? "Ready" : "Unavailable"}</small>
             </div>
             <dl>
@@ -371,6 +400,19 @@ export default function App() {
               <div><dt>H.265</dt><dd>{runtime?.libx265 ? "libx265" : "Unavailable"}</dd></div>
             </dl>
             {runtime?.ffmpeg_version && <p className="runtime-version" title={runtime.ffmpeg_version}>{runtime.ffmpeg_version}</p>}
+          </div>
+
+          <div className="hardware-card">
+            <div className="section-heading">
+              <span>AI runtime</span>
+              <small>M2 · NCNN/Vulkan</small>
+            </div>
+            <dl>
+              <div><dt>Real-ESRGAN</dt><dd>{ncnnRuntime?.realesrgan.available ? "Detected" : "Not installed"}</dd></div>
+              <div><dt>Real-CUGAN</dt><dd>{ncnnRuntime?.realcugan.available ? "Detected" : "Not installed"}</dd></div>
+              <div><dt>RIFE</dt><dd>{ncnnRuntime?.rife.available ? "Detected" : "Not installed"}</dd></div>
+              <div><dt>Catalog</dt><dd>{ncnnRuntime ? `${ncnnRuntime.models.length} model profiles` : "Loading"}</dd></div>
+            </dl>
           </div>
 
           <div className="hardware-card">
@@ -393,10 +435,11 @@ export default function App() {
       </section>
 
       <section className="status-strip">
-        <span>M1 ffprobe ✓</span>
-        <span>M1 FFmpeg runner ✓</span>
+        <span>M1 media pipeline ✓</span>
         <span>M1 runtime self-test ✓</span>
-        <span>M2 NCNN/Vulkan: next</span>
+        <span>M2 NCNN probe ✓</span>
+        <span>M2 Real-ESRGAN adapter ✓</span>
+        <span>M2 frame stream: next</span>
       </section>
     </main>
   );

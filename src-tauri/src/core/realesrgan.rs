@@ -1,4 +1,7 @@
-use std::{path::{Path, PathBuf}, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use super::{
     engine::{EngineDescriptor, EngineError, EngineKind, EnhancementEngine},
@@ -65,7 +68,7 @@ impl RealEsrganNcnnEngine {
         self
     }
 
-    fn command(&self, input: &Path, output: &Path) -> Command {
+    pub(crate) fn build_command(&self, input: &Path, output: &Path) -> Command {
         let mut command = Command::new(&self.binary);
         command
             .arg("-i")
@@ -77,7 +80,9 @@ impl RealEsrganNcnnEngine {
             .arg("-t")
             .arg(self.tile_size.to_string())
             .arg("-n")
-            .arg(&self.model.model_stem);
+            .arg(&self.model.model_stem)
+            .arg("-f")
+            .arg("png");
 
         if let Some(model_dir) = &self.model_dir {
             command.arg("-m").arg(model_dir);
@@ -141,7 +146,7 @@ impl EnhancementEngine for RealEsrganNcnnEngine {
         self.self_test()?;
 
         let output_result = self
-            .command(input, output)
+            .build_command(input, output)
             .output()
             .map_err(|error| EngineError::Execution(error.to_string()))?;
 

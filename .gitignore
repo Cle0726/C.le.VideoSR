@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+Thumbs.db
+
+# Rust / Tauri
+src-tauri/target/
+**/*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+
+# Local runtime/model payloads
+runtime/
+models/
+cache/
+output/

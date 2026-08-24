@@ -4,6 +4,20 @@ Local-first AI video enhancement workstation.
 
 C.le.VideoSR is designed as a desktop application for video restoration, super-resolution and frame interpolation. The application keeps media local and separates the desktop shell, orchestration core and inference backends so new engines can be added without rewriting the product.
 
+## Product policy
+
+The core local desktop experience is intended to remain free to use:
+
+- Local video super-resolution is free.
+- Local frame interpolation is free.
+- Core local processing has no per-video fee and no usage-count limit.
+- Core local processing does not require a cloud account or paid API.
+- Basic super-resolution and frame interpolation should not become paid-only features in the future.
+
+Free-to-use product policy and open-source licensing are separate decisions. The repository does not currently declare a project license; third-party runtime/model obligations must be reviewed before a license or redistribution policy is finalized.
+
+See [`docs/product-principles.md`](docs/product-principles.md) for the longer product commitment.
+
 ## Direction
 
 - Local processing by default

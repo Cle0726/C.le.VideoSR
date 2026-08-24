@@ -69,11 +69,12 @@ type StartJobResponse = { job_id: string };
 type Mode = "fast" | "quality" | "restore";
 type Codec = "h264" | "h265" | "copy";
 type JobStatus = "idle" | ProcessingEvent["status"];
+type JobKind = "media" | "upscale" | null;
 
 const modes: Array<{ id: Mode; title: string; detail: string }> = [
-  { id: "fast", title: "Fast", detail: "Low VRAM · Vulkan · broad GPU support" },
-  { id: "quality", title: "Quality", detail: "Higher fidelity · CUDA / TensorRT ready" },
-  { id: "restore", title: "AI Restore", detail: "Temporal restoration · high VRAM" },
+  { id: "fast", title: "Fast", detail: "NCNN/Vulkan · broad GPU support" },
+  { id: "quality", title: "Quality", detail: "TensorRT / CUDA · planned" },
+  { id: "restore", title: "AI Restore", detail: "Temporal restoration · planned" },
 ];
 
 function formatDuration(seconds: number | null) {
@@ -109,6 +110,8 @@ export default function App() {
   const [probing, setProbing] = useState(false);
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [codec, setCodec] = useState<Codec>("h264");
+  const [selectedModelId, setSelectedModelId] = useState("");
+  const [jobKind, setJobKind] = useState<JobKind>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus>("idle");
   const [jobId, setJobId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -139,6 +142,13 @@ export default function App() {
   }, [runtime, codec]);
 
   useEffect(() => {
+    if (!ncnnRuntime || selectedModelId) return;
+    const models = ncnnRuntime.models.filter((model) => model.engine === "realesrgan-ncnn-vulkan");
+    const preferred = models.find((model) => model.id === "realesrgan-x4plus") ?? models[0];
+    if (preferred) setSelectedModelId(preferred.id);
+  }, [ncnnRuntime, selectedModelId]);
+
+  useEffect(() => {
     let unlisten: (() => void) | undefined;
 
     listen<ProcessingEvent>("job-progress", ({ payload }) => {
@@ -160,6 +170,7 @@ export default function App() {
 
   function resetJob() {
     activeJobRef.current = null;
+    setJobKind(null);
     setJobId(null);
     setJobStatus("idle");
     setProgress(0);
@@ -213,24 +224,49 @@ export default function App() {
     return selected;
   }
 
+  const aiModels = ncnnRuntime?.models.filter((model) => model.engine === "realesrgan-ncnn-vulkan") ?? [];
+  const selectedModel = aiModels.find((model) => model.id === selectedModelId) ?? null;
   const codecAvailable =
     codec === "copy" ||
     (codec === "h264" && Boolean(runtime?.libx264)) ||
     (codec === "h265" && Boolean(runtime?.libx265));
-  const canRun = Boolean(media && runtime?.ffmpeg_available && codecAvailable && jobStatus !== "running");
+  const upscaleCodecAvailable =
+    codec !== "copy" &&
+    ((codec === "h264" && Boolean(runtime?.libx264)) ||
+      (codec === "h265" && Boolean(runtime?.libx265)));
+  const canRunMedia = Boolean(media && runtime?.ffmpeg_available && codecAvailable && jobStatus !== "running");
+  const canRunUpscale = Boolean(
+    media &&
+      mode === "fast" &&
+      runtime?.ffmpeg_available &&
+      ncnnRuntime?.realesrgan.available &&
+      selectedModel &&
+      media.duration_seconds &&
+      media.frame_rate &&
+      upscaleCodecAvailable &&
+      jobStatus !== "running",
+  );
+  const targetResolution =
+    media?.width && media?.height && selectedModel
+      ? `${media.width * selectedModel.scale} × ${media.height * selectedModel.scale}`
+      : null;
 
-  async function startProcessing() {
-    if (!media || !canRun) return;
-    setJobMessage(null);
-
-    const target = outputPath ?? (await chooseOutput());
-    if (!target) return;
-
+  function beginJob(kind: Exclude<JobKind, null>, message: string) {
+    activeJobRef.current = null;
+    setJobKind(kind);
     setJobStatus("running");
     setProgress(0);
     setOutTime(0);
     setSpeed(null);
-    setJobMessage("Starting local FFmpeg pipeline…");
+    setJobMessage(message);
+  }
+
+  async function startMediaProcessing() {
+    if (!media || !canRunMedia) return;
+    const target = outputPath ?? (await chooseOutput());
+    if (!target) return;
+
+    beginJob("media", "Starting local FFmpeg validation pipeline…");
 
     try {
       const response = await invoke<StartJobResponse>("start_processing", {
@@ -250,11 +286,42 @@ export default function App() {
     }
   }
 
-  async function cancelProcessing() {
-    const currentJob = activeJobRef.current ?? jobId;
-    if (!currentJob) return;
+  async function startUpscale() {
+    if (!media || !selectedModel || !canRunUpscale || !media.duration_seconds || !media.frame_rate) return;
+    const target = outputPath ?? (await chooseOutput());
+    if (!target) return;
+
+    beginJob("upscale", `Starting ${selectedModel.display_name}…`);
+
     try {
-      const cancelled = await invoke<boolean>("cancel_processing", { jobId: currentJob });
+      const response = await invoke<StartJobResponse>("start_upscale", {
+        request: {
+          input_path: media.path,
+          output_path: target,
+          model_id: selectedModel.id,
+          video_codec: codec,
+          duration_seconds: media.duration_seconds,
+          frame_rate: media.frame_rate,
+          chunk_seconds: 2,
+          tile_size: 0,
+          tta: false,
+        },
+      });
+      activeJobRef.current = response.job_id;
+      setJobId(response.job_id);
+    } catch (error) {
+      activeJobRef.current = null;
+      setJobStatus("failed");
+      setJobMessage(String(error));
+    }
+  }
+
+  async function cancelActiveJob() {
+    const currentJob = activeJobRef.current ?? jobId;
+    if (!currentJob || !jobKind) return;
+    try {
+      const command = jobKind === "upscale" ? "cancel_upscale" : "cancel_processing";
+      const cancelled = await invoke<boolean>(command, { jobId: currentJob });
       if (!cancelled) setJobMessage("The processing job is no longer active.");
       else setJobMessage("Cancelling…");
     } catch (error) {
@@ -286,6 +353,7 @@ export default function App() {
                   <span>{formatDuration(media.duration_seconds)}</span>
                   <span>{media.video_codec?.toUpperCase() ?? "Codec unknown"}</span>
                 </div>
+                {targetResolution && <p className="target-resolution">AI target · {targetResolution}</p>}
                 <button className="primary-button" type="button" onClick={selectVideo} disabled={probing || jobStatus === "running"}>
                   {probing ? "Inspecting…" : "Choose another video"}
                 </button>
@@ -307,8 +375,14 @@ export default function App() {
             <div className="job-panel">
               <div className="job-header">
                 <div>
-                  <small>M1 MEDIA PIPELINE</small>
-                  <strong>{jobStatus === "idle" ? "Ready to validate local processing" : jobStatus}</strong>
+                  <small>{jobKind === "upscale" ? "M2 AI UPSCALE" : "M1 MEDIA PIPELINE"}</small>
+                  <strong>
+                    {jobStatus === "idle"
+                      ? ncnnRuntime?.realesrgan.available
+                        ? "Ready for local AI enhancement"
+                        : "Media pipeline ready · AI runtime missing"
+                      : jobStatus}
+                  </strong>
                 </div>
                 {jobStatus !== "idle" && <span>{progress.toFixed(1)}%</span>}
               </div>
@@ -317,7 +391,7 @@ export default function App() {
               </div>
               <div className="job-meta">
                 <span>{formatDuration(outTime)} processed</span>
-                <span>{speed ? `${speed} speed` : "Waiting for FFmpeg"}</span>
+                <span>{speed ? `${speed} speed` : jobKind === "upscale" ? "NCNN chunk pipeline" : "Waiting for FFmpeg"}</span>
                 {jobId && <span title={jobId}>{jobId.slice(-10)}</span>}
               </div>
               {jobMessage && <p className={jobStatus === "failed" ? "error-message" : "job-message"}>{jobMessage}</p>}
@@ -349,28 +423,63 @@ export default function App() {
           {media && (
             <div className="hardware-card output-card">
               <div className="section-heading">
-                <span>Output</span>
-                <small>M1 validation</small>
+                <span>Enhancement</span>
+                <small>{mode === "fast" ? "M2 · NCNN/Vulkan" : "Planned backend"}</small>
               </div>
+
+              {mode === "fast" && (
+                <>
+                  <label className="field-label" htmlFor="model">Model</label>
+                  <select
+                    id="model"
+                    value={selectedModelId}
+                    onChange={(event) => setSelectedModelId(event.target.value)}
+                    disabled={jobStatus === "running" || aiModels.length === 0}
+                  >
+                    {aiModels.length === 0 && <option value="">No Real-ESRGAN profiles</option>}
+                    {aiModels.map((model) => (
+                      <option key={model.id} value={model.id}>{model.display_name} · {model.scale}×</option>
+                    ))}
+                  </select>
+                </>
+              )}
+
               <label className="field-label" htmlFor="codec">Video codec</label>
               <select id="codec" value={codec} onChange={(event) => setCodec(event.target.value as Codec)} disabled={jobStatus === "running"}>
                 <option value="h264" disabled={runtime ? !runtime.libx264 : false}>H.264 · libx264</option>
                 <option value="h265" disabled={runtime ? !runtime.libx265 : false}>H.265 · libx265</option>
-                <option value="copy">Copy source video stream</option>
+                <option value="copy">Copy source video stream · M1 only</option>
               </select>
+
               <button className="path-button" type="button" onClick={chooseOutput} disabled={jobStatus === "running"}>
                 <span>{outputPath ? fileName(outputPath) : "Choose output file"}</span>
                 <small>{outputPath ?? "MP4 / MKV"}</small>
               </button>
+
               {jobStatus === "running" ? (
-                <button className="danger-button" type="button" onClick={cancelProcessing}>Cancel processing</button>
+                <button className="danger-button" type="button" onClick={cancelActiveJob}>Cancel processing</button>
               ) : (
-                <button className="run-button" type="button" onClick={startProcessing} disabled={!canRun}>
-                  Run media pipeline
-                </button>
+                <div className="action-stack">
+                  <button className="run-button" type="button" onClick={startUpscale} disabled={!canRunUpscale}>
+                    Enhance video · {selectedModel ? `${selectedModel.scale}×` : "NCNN"}
+                  </button>
+                  <button className="secondary-button" type="button" onClick={startMediaProcessing} disabled={!canRunMedia}>
+                    Validate media pipeline
+                  </button>
+                </div>
               )}
-              {!runtime?.ffmpeg_available && <p className="error-message">FFmpeg is required to run the local media pipeline.</p>}
-              <p className="pipeline-note">This M1 step validates decode / encode / progress / cancel. AI super-resolution is not enabled yet.</p>
+
+              {!runtime?.ffmpeg_available && <p className="error-message">FFmpeg is required for video processing.</p>}
+              {mode === "fast" && ncnnRuntime?.realesrgan.available === false && (
+                <p className="error-message">realesrgan-ncnn-vulkan is not installed or not available in PATH.</p>
+              )}
+              {codec === "copy" && mode === "fast" && (
+                <p className="pipeline-note">AI enhancement creates new video frames, so H.264 or H.265 must be selected instead of stream copy.</p>
+              )}
+              {mode !== "fast" && <p className="pipeline-note">Quality and AI Restore backends are intentionally disabled until their runtimes land.</p>}
+              {mode === "fast" && (
+                <p className="pipeline-note">M2 keeps only a short frame chunk on disk, streams enhanced PNG frames into one FFmpeg encoder, then removes each chunk.</p>
+              )}
             </div>
           )}
 
@@ -425,7 +534,7 @@ export default function App() {
                 <div><dt>Platform</dt><dd>{hardware.os} · {hardware.arch}</dd></div>
                 <div><dt>CPU</dt><dd>{hardware.cpu_cores} logical cores</dd></div>
                 <div><dt>Memory</dt><dd>{Math.round(hardware.total_memory_mb / 1024)} GB</dd></div>
-                <div><dt>GPU</dt><dd>{hardware.gpu_hint ?? "Backend probe planned for M2"}</dd></div>
+                <div><dt>GPU</dt><dd>{hardware.gpu_hint ?? "NCNN will select Vulkan GPU automatically"}</dd></div>
               </dl>
             ) : (
               <p className="muted">{hardwareError ?? "Reading local capabilities…"}</p>
@@ -436,10 +545,10 @@ export default function App() {
 
       <section className="status-strip">
         <span>M1 media pipeline ✓</span>
-        <span>M1 runtime self-test ✓</span>
         <span>M2 NCNN probe ✓</span>
         <span>M2 Real-ESRGAN adapter ✓</span>
-        <span>M2 frame stream: next</span>
+        <span>M2 bounded chunk upscale ✓</span>
+        <span>M2 model/runtime packaging: next</span>
       </section>
     </main>
   );

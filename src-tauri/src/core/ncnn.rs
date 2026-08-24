@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::{
     env,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::Command,
 };
 
@@ -51,8 +51,7 @@ fn runtime_roots() -> Vec<(PathBuf, String)> {
     let mut roots = Vec::new();
 
     if let Ok(root) = env::var("CLE_VIDEOSR_RUNTIME_DIR") {
-        let root = PathBuf::from(root);
-        push_runtime_root(&mut roots, root, "CLE_VIDEOSR_RUNTIME_DIR");
+        push_runtime_root(&mut roots, PathBuf::from(root), "CLE_VIDEOSR_RUNTIME_DIR");
     }
 
     if let Ok(exe) = env::current_exe() {
@@ -115,9 +114,7 @@ fn probe_binary(program: &str) -> BinaryProbe {
                     source,
                 };
             }
-            Err(error) => {
-                last_error = Some(error.to_string());
-            }
+            Err(error) => last_error = Some(error.to_string()),
         }
     }
 
@@ -154,9 +151,7 @@ fn model_dir_candidates() -> Vec<PathBuf> {
 }
 
 pub fn resolve_ncnn_model_dir() -> Option<PathBuf> {
-    model_dir_candidates()
-        .into_iter()
-        .find(|candidate| Path::new(candidate).is_dir())
+    model_dir_candidates().into_iter().find(|candidate| candidate.is_dir())
 }
 
 pub fn detect_ncnn_runtime() -> NcnnRuntimeInfo {

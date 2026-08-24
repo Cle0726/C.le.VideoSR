@@ -6,6 +6,7 @@ use std::{
 use super::{
     engine::{EngineDescriptor, EngineError, EngineKind, EnhancementEngine},
     models::ModelManifest,
+    ncnn::{resolve_ncnn_binary, resolve_ncnn_model_dir},
 };
 
 pub struct RealEsrganNcnnEngine {
@@ -33,10 +34,18 @@ impl RealEsrganNcnnEngine {
             )));
         }
 
+        let requested_binary = binary.into();
+        let resolved_binary = if requested_binary.components().count() == 1 {
+            let program = requested_binary.to_string_lossy();
+            resolve_ncnn_binary(&program)
+        } else {
+            requested_binary
+        };
+
         Ok(Self {
-            binary: binary.into(),
+            binary: resolved_binary,
             model,
-            model_dir: None,
+            model_dir: resolve_ncnn_model_dir(),
             tile_size: 0,
             gpu_id: None,
             tta: false,
@@ -107,13 +116,18 @@ impl EnhancementEngine for RealEsrganNcnnEngine {
             kind: EngineKind::NcnnVulkan,
             available,
             detail: Some(format!(
-                "scale={} tile={} gpu={} tta={}",
+                "binary={} scale={} tile={} gpu={} tta={} models={}",
+                self.binary.display(),
                 self.model.scale,
                 self.tile_size,
                 self.gpu_id
                     .map(|value| value.to_string())
                     .unwrap_or_else(|| "auto".into()),
-                self.tta
+                self.tta,
+                self.model_dir
+                    .as_ref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "engine-default".into())
             )),
         }
     }
@@ -122,7 +136,9 @@ impl EnhancementEngine for RealEsrganNcnnEngine {
         let output = Command::new(&self.binary)
             .arg("-h")
             .output()
-            .map_err(|error| EngineError::Unavailable(error.to_string()))?;
+            .map_err(|error| {
+                EngineError::Unavailable(format!("{}: {error}", self.binary.display()))
+            })?;
 
         if output.stdout.is_empty() && output.stderr.is_empty() && !output.status.success() {
             return Err(EngineError::Unavailable(format!(

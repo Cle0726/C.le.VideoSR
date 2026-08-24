@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "id": "realesrgan-x4plus",
+      "display_name": "Real-ESRGAN x4plus",
+      "task": "super_resolution",
+      "engine": "realesrgan-ncnn-vulkan",
+      "scale": 4,
+      "content": "general",
+      "model_stem": "realesrgan-x4plus",
+      "bundled": false,
+      "license_status": "review_required"
+    },
+    {
+      "id": "realesrgan-x4plus-anime",
+      "display_name": "Real-ESRGAN x4plus Anime",
+      "task": "super_resolution",
+      "engine": "realesrgan-ncnn-vulkan",
+      "scale": 4,
+      "content": "animation",
+      "model_stem": "realesrgan-x4plus-anime",
+      "bundled": false,
+      "license_status": "review_required"
+    },
+    {
+      "id": "realesr-animevideov3-x2",
+      "display_name": "Real-ESRGAN AnimeVideo v3 x2",
+      "task": "super_resolution",
+      "engine": "realesrgan-ncnn-vulkan",
+      "scale": 2,
+      "content": "animation",
+      "model_stem": "realesr-animevideov3-x2",
+      "bundled": false,
+      "license_status": "review_required"
+    },
+    {
+      "id": "realesr-animevideov3-x4",
+      "display_name": "Real-ESRGAN AnimeVideo v3 x4",
+      "task": "super_resolution",
+      "engine": "realesrgan-ncnn-vulkan",
+      "scale": 4,
+      "content": "animation",
+      "model_stem": "realesr-animevideov3-x4",
+      "bundled": false,
+      "license_status": "review_required"
+    }
+  ]
+}

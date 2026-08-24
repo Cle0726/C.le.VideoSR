@@ -1,29 +1,3 @@
-.target-resolution {
-  margin: 12px 0 0;
-  color: #9db9d8 !important;
-  font-size: 13px;
-}
-
-.action-stack {
-  display: grid;
-  gap: 8px;
-}
-
-.secondary-button {
-  width: 100%;
-  padding: 11px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  color: #aab8c9;
-  background: rgba(255, 255, 255, 0.035);
-  cursor: pointer;
-}
-
-.secondary-button:hover:not(:disabled) {
-  border-color: rgba(143, 185, 238, 0.2);
-  background: rgba(255, 255, 255, 0.055);
-}
-
 .subsection-divider {
   height: 1px;
   margin: 8px 0 4px;

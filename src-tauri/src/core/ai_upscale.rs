@@ -48,6 +48,33 @@ pub struct StartUpscaleResponse {
     pub job_id: String,
 }
 
+struct ChildGuard {
+    child: Option<Child>,
+}
+
+impl ChildGuard {
+    fn new(child: Child) -> Self {
+        Self { child: Some(child) }
+    }
+
+    fn child_mut(&mut self) -> &mut Child {
+        self.child.as_mut().expect("child guard is armed")
+    }
+
+    fn take(mut self) -> Child {
+        self.child.take().expect("child guard is armed")
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 fn emit(
     app: &AppHandle,
     job_id: &str,
@@ -294,14 +321,17 @@ fn process_video(
     let enhanced_frames = work_root.join("enhanced");
     let video_only = work_root.join("video-only.mkv");
 
-    let mut encoder = encoder_command(fps, &request.video_codec, &video_only)?
+    let encoder_child = encoder_command(fps, &request.video_codec, &video_only)?
         .spawn()
         .map_err(|error| format!("Unable to start output encoder: {error}"))?;
+    let mut encoder = ChildGuard::new(encoder_child);
     let mut encoder_input = encoder
+        .child_mut()
         .stdin
         .take()
         .ok_or_else(|| "Unable to open output encoder stdin.".to_string())?;
     let encoder_stderr = encoder
+        .child_mut()
         .stderr
         .take()
         .ok_or_else(|| "Unable to capture output encoder stderr.".to_string())?;
@@ -311,9 +341,6 @@ fn process_video(
 
     for index in 0..total_chunks {
         if cancel.load(Ordering::Relaxed) {
-            let _ = encoder.kill();
-            let _ = encoder.wait();
-            let _ = encoder_stderr_thread.join();
             return Err(CANCELLED.into());
         }
 
@@ -376,9 +403,6 @@ fn process_video(
 
         for frame in frames {
             if cancel.load(Ordering::Relaxed) {
-                let _ = encoder.kill();
-                let _ = encoder.wait();
-                let _ = encoder_stderr_thread.join();
                 return Err(CANCELLED.into());
             }
             let bytes = fs::read(&frame)
@@ -405,6 +429,7 @@ fn process_video(
     }
 
     drop(encoder_input);
+    let encoder = encoder.take();
     wait_child(
         encoder,
         cancel,

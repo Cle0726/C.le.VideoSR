@@ -30,7 +30,7 @@
       "engine": "realesrgan-ncnn-vulkan",
       "scale": 2,
       "content": "animation",
-      "model_stem": "realesr-animevideov3-x2",
+      "model_stem": "realesr-animevideov3",
       "bundled": false,
       "license_status": "review_required"
     },
@@ -41,7 +41,7 @@
       "engine": "realesrgan-ncnn-vulkan",
       "scale": 4,
       "content": "animation",
-      "model_stem": "realesr-animevideov3-x4",
+      "model_stem": "realesr-animevideov3",
       "bundled": false,
       "license_status": "review_required"
     }

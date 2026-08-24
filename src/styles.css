@@ -1,0 +1,217 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f5f7fb;
+  background:
+    radial-gradient(circle at top left, rgba(69, 113, 170, 0.18), transparent 32%),
+    linear-gradient(135deg, #090c11 0%, #111722 55%, #0b1017 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: transparent;
+}
+
+button { font: inherit; }
+
+.shell {
+  width: min(1180px, calc(100vw - 48px));
+  margin: 0 auto;
+  padding: 34px 0 28px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.topbar h1 {
+  margin: 2px 0 0;
+  font-size: clamp(30px, 4vw, 48px);
+  letter-spacing: -0.05em;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #8fb9ee;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.local-badge {
+  border: 1px solid rgba(150, 192, 240, 0.18);
+  border-radius: 999px;
+  padding: 10px 14px;
+  color: #b9cce4;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.8fr);
+  gap: 18px;
+}
+
+.panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.drop-panel {
+  min-height: 520px;
+  padding: 18px;
+}
+
+.drop-zone {
+  height: 100%;
+  min-height: 484px;
+  border: 1px dashed rgba(143, 185, 238, 0.28);
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+  background:
+    radial-gradient(circle at center, rgba(78, 131, 198, 0.12), transparent 42%),
+    rgba(8, 13, 19, 0.42);
+}
+
+.drop-zone h2 {
+  margin: 18px 0 6px;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+
+.drop-zone p,
+.muted {
+  color: #8f9bab;
+}
+
+.drop-zone button {
+  margin-top: 22px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: #8f9bab;
+}
+
+.drop-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 17px;
+  font-size: 29px;
+  background: rgba(122, 173, 235, 0.11);
+  border: 1px solid rgba(143, 185, 238, 0.18);
+  color: #a9d0ff;
+}
+
+.settings-panel {
+  padding: 22px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  font-weight: 650;
+}
+
+.section-heading small {
+  color: #78889c;
+  font-weight: 500;
+}
+
+.mode-list {
+  display: grid;
+  gap: 10px;
+}
+
+.mode-card {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  padding: 15px 16px;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #e8edf4;
+  background: rgba(7, 11, 16, 0.42);
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.mode-card:hover {
+  border-color: rgba(143, 185, 238, 0.22);
+  transform: translateY(-1px);
+}
+
+.mode-card.active {
+  border-color: rgba(125, 177, 239, 0.42);
+  background: linear-gradient(135deg, rgba(73, 128, 196, 0.22), rgba(255, 255, 255, 0.035));
+  box-shadow: inset 0 0 0 1px rgba(162, 205, 255, 0.04);
+}
+
+.mode-card small {
+  color: #8190a2;
+}
+
+.hardware-card {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+dl {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+dl div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+dt { color: #748296; }
+dd { margin: 0; color: #dbe4ef; text-align: right; }
+
+.status-strip {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.status-strip span {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  padding: 8px 11px;
+  color: #76869a;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 13px;
+}
+
+@media (max-width: 860px) {
+  .shell { width: min(100% - 28px, 680px); }
+  .hero-grid { grid-template-columns: 1fr; }
+  .drop-panel { min-height: 410px; }
+  .drop-zone { min-height: 374px; }
+}

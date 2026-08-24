@@ -35,12 +35,15 @@ type BinaryProbe = {
   name: string;
   available: boolean;
   detail: string | null;
+  resolved_path: string | null;
+  source: string;
 };
 
 type NcnnRuntimeInfo = {
   realesrgan: BinaryProbe;
   realcugan: BinaryProbe;
   rife: BinaryProbe;
+  model_dir: string | null;
   models: ModelManifest[];
 };
 
@@ -77,6 +80,8 @@ const modes: Array<{ id: Mode; title: string; detail: string }> = [
   { id: "restore", title: "AI Restore", detail: "Temporal restoration · planned" },
 ];
 
+const FAST_ENGINES = new Set(["realesrgan-ncnn-vulkan", "realcugan-ncnn-vulkan"]);
+
 function formatDuration(seconds: number | null) {
   if (seconds == null || !Number.isFinite(seconds)) return "Unknown";
   const total = Math.max(0, Math.round(seconds));
@@ -97,6 +102,12 @@ function suggestedOutputPath(path: string) {
   const dot = name.lastIndexOf(".");
   const stem = dot > 0 ? name.slice(0, dot) : name;
   return `${directory}${stem}_enhanced.mp4`;
+}
+
+function engineLabel(engine: string | undefined) {
+  if (engine === "realesrgan-ncnn-vulkan") return "Real-ESRGAN";
+  if (engine === "realcugan-ncnn-vulkan") return "Real-CUGAN";
+  return "NCNN";
 }
 
 export default function App() {
@@ -143,7 +154,7 @@ export default function App() {
 
   useEffect(() => {
     if (!ncnnRuntime || selectedModelId) return;
-    const models = ncnnRuntime.models.filter((model) => model.engine === "realesrgan-ncnn-vulkan");
+    const models = ncnnRuntime.models.filter((model) => FAST_ENGINES.has(model.engine));
     const preferred = models.find((model) => model.id === "realesrgan-x4plus") ?? models[0];
     if (preferred) setSelectedModelId(preferred.id);
   }, [ncnnRuntime, selectedModelId]);
@@ -224,8 +235,16 @@ export default function App() {
     return selected;
   }
 
-  const aiModels = ncnnRuntime?.models.filter((model) => model.engine === "realesrgan-ncnn-vulkan") ?? [];
+  const aiModels = ncnnRuntime?.models.filter((model) => FAST_ENGINES.has(model.engine)) ?? [];
   const selectedModel = aiModels.find((model) => model.id === selectedModelId) ?? null;
+  const selectedEngineProbe =
+    selectedModel?.engine === "realesrgan-ncnn-vulkan"
+      ? ncnnRuntime?.realesrgan
+      : selectedModel?.engine === "realcugan-ncnn-vulkan"
+        ? ncnnRuntime?.realcugan
+        : null;
+  const selectedEngineAvailable = Boolean(selectedEngineProbe?.available);
+  const anyFastEngineAvailable = Boolean(ncnnRuntime?.realesrgan.available || ncnnRuntime?.realcugan.available);
   const codecAvailable =
     codec === "copy" ||
     (codec === "h264" && Boolean(runtime?.libx264)) ||
@@ -239,7 +258,7 @@ export default function App() {
     media &&
       mode === "fast" &&
       runtime?.ffmpeg_available &&
-      ncnnRuntime?.realesrgan.available &&
+      selectedEngineAvailable &&
       selectedModel &&
       media.duration_seconds &&
       media.frame_rate &&
@@ -378,7 +397,7 @@ export default function App() {
                   <small>{jobKind === "upscale" ? "M2 AI UPSCALE" : "M1 MEDIA PIPELINE"}</small>
                   <strong>
                     {jobStatus === "idle"
-                      ? ncnnRuntime?.realesrgan.available
+                      ? anyFastEngineAvailable
                         ? "Ready for local AI enhancement"
                         : "Media pipeline ready · AI runtime missing"
                       : jobStatus}
@@ -436,9 +455,11 @@ export default function App() {
                     onChange={(event) => setSelectedModelId(event.target.value)}
                     disabled={jobStatus === "running" || aiModels.length === 0}
                   >
-                    {aiModels.length === 0 && <option value="">No Real-ESRGAN profiles</option>}
+                    {aiModels.length === 0 && <option value="">No Fast-mode model profiles</option>}
                     {aiModels.map((model) => (
-                      <option key={model.id} value={model.id}>{model.display_name} · {model.scale}×</option>
+                      <option key={model.id} value={model.id}>
+                        {model.display_name} · {model.scale}× · {engineLabel(model.engine)}
+                      </option>
                     ))}
                   </select>
                 </>
@@ -470,8 +491,10 @@ export default function App() {
               )}
 
               {!runtime?.ffmpeg_available && <p className="error-message">FFmpeg is required for video processing.</p>}
-              {mode === "fast" && ncnnRuntime?.realesrgan.available === false && (
-                <p className="error-message">realesrgan-ncnn-vulkan is not installed or not available in PATH.</p>
+              {mode === "fast" && selectedModel && !selectedEngineAvailable && (
+                <p className="error-message">
+                  {engineLabel(selectedModel.engine)} runtime is not available. Add the managed runtime payload or configure the development PATH.
+                </p>
               )}
               {codec === "copy" && mode === "fast" && (
                 <p className="pipeline-note">AI enhancement creates new video frames, so H.264 or H.265 must be selected instead of stream copy.</p>
@@ -514,12 +537,23 @@ export default function App() {
           <div className="hardware-card">
             <div className="section-heading">
               <span>AI runtime</span>
-              <small>M2 · NCNN/Vulkan</small>
+              <small>M2 · managed / PATH fallback</small>
             </div>
             <dl>
-              <div><dt>Real-ESRGAN</dt><dd>{ncnnRuntime?.realesrgan.available ? "Detected" : "Not installed"}</dd></div>
-              <div><dt>Real-CUGAN</dt><dd>{ncnnRuntime?.realcugan.available ? "Detected" : "Not installed"}</dd></div>
-              <div><dt>RIFE</dt><dd>{ncnnRuntime?.rife.available ? "Detected" : "Not installed"}</dd></div>
+              <div>
+                <dt>Real-ESRGAN</dt>
+                <dd title={ncnnRuntime?.realesrgan.resolved_path ?? undefined}>
+                  {ncnnRuntime?.realesrgan.available ? `Detected · ${ncnnRuntime.realesrgan.source}` : "Not installed"}
+                </dd>
+              </div>
+              <div>
+                <dt>Real-CUGAN</dt>
+                <dd title={ncnnRuntime?.realcugan.resolved_path ?? undefined}>
+                  {ncnnRuntime?.realcugan.available ? `Detected · ${ncnnRuntime.realcugan.source}` : "Not installed"}
+                </dd>
+              </div>
+              <div><dt>RIFE</dt><dd>{ncnnRuntime?.rife.available ? `Detected · ${ncnnRuntime.rife.source}` : "Not installed"}</dd></div>
+              <div><dt>Models</dt><dd title={ncnnRuntime?.model_dir ?? undefined}>{ncnnRuntime?.model_dir ? "Managed directory" : "Engine default / not staged"}</dd></div>
               <div><dt>Catalog</dt><dd>{ncnnRuntime ? `${ncnnRuntime.models.length} model profiles` : "Loading"}</dd></div>
             </dl>
           </div>
@@ -545,10 +579,11 @@ export default function App() {
 
       <section className="status-strip">
         <span>M1 media pipeline ✓</span>
-        <span>M2 NCNN probe ✓</span>
-        <span>M2 Real-ESRGAN adapter ✓</span>
-        <span>M2 bounded chunk upscale ✓</span>
-        <span>M2 model/runtime packaging: next</span>
+        <span>M2 Real-ESRGAN ✓</span>
+        <span>M2 Real-CUGAN ✓</span>
+        <span>M2 bounded video upscale ✓</span>
+        <span>M2 managed runtime staging ✓</span>
+        <span>M2 VRAM-aware tiling: next</span>
       </section>
     </main>
   );

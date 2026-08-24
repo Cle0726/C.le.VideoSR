@@ -102,6 +102,10 @@ impl RifeNcnnEngine {
 
         command
     }
+
+    pub(crate) fn build_directory_command(&self, input: &Path, output: &Path) -> Command {
+        self.command(input, output)
+    }
 }
 
 fn resolve_model_directory(binary: &Path, model_stem: &str) -> Option<PathBuf> {

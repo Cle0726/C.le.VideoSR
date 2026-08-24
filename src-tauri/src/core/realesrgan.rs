@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::{
-    engine::{EngineDescriptor, EngineError, EngineKind, EnhancementEngine},
+    engine::{DirectoryCliEngine, EngineDescriptor, EngineError, EngineKind, EnhancementEngine},
     models::ModelManifest,
     ncnn::{resolve_ncnn_binary, resolve_ncnn_model_dir},
 };
@@ -26,7 +26,6 @@ impl RealEsrganNcnnEngine {
                 model.id, model.engine
             )));
         }
-
         if !matches!(model.scale, 2 | 3 | 4) {
             return Err(EngineError::Configuration(format!(
                 "unsupported Real-ESRGAN NCNN scale {} for model {}",
@@ -36,8 +35,7 @@ impl RealEsrganNcnnEngine {
 
         let requested_binary = binary.into();
         let resolved_binary = if requested_binary.components().count() == 1 {
-            let program = requested_binary.to_string_lossy();
-            resolve_ncnn_binary(&program)
+            resolve_ncnn_binary(&requested_binary.to_string_lossy())
         } else {
             requested_binary
         };
@@ -77,106 +75,67 @@ impl RealEsrganNcnnEngine {
         self
     }
 
-    pub(crate) fn build_command(&self, input: &Path, output: &Path) -> Command {
+    fn command(&self, input: &Path, output: &Path) -> Command {
         let mut command = Command::new(&self.binary);
         command
-            .arg("-i")
-            .arg(input)
-            .arg("-o")
-            .arg(output)
-            .arg("-s")
-            .arg(self.model.scale.to_string())
-            .arg("-t")
-            .arg(self.tile_size.to_string())
-            .arg("-n")
-            .arg(&self.model.model_stem)
-            .arg("-f")
-            .arg("png");
-
-        if let Some(model_dir) = &self.model_dir {
-            command.arg("-m").arg(model_dir);
-        }
-        if let Some(gpu_id) = self.gpu_id {
-            command.arg("-g").arg(gpu_id.to_string());
-        }
-        if self.tta {
-            command.arg("-x");
-        }
-
+            .arg("-i").arg(input)
+            .arg("-o").arg(output)
+            .arg("-s").arg(self.model.scale.to_string())
+            .arg("-t").arg(self.tile_size.to_string())
+            .arg("-n").arg(&self.model.model_stem)
+            .arg("-f").arg("png");
+        if let Some(model_dir) = &self.model_dir { command.arg("-m").arg(model_dir); }
+        if let Some(gpu_id) = self.gpu_id { command.arg("-g").arg(gpu_id.to_string()); }
+        if self.tta { command.arg("-x"); }
         command
     }
 }
 
 impl EnhancementEngine for RealEsrganNcnnEngine {
     fn descriptor(&self) -> EngineDescriptor {
-        let available = Command::new(&self.binary).arg("-h").output().is_ok();
         EngineDescriptor {
             id: format!("realesrgan-ncnn:{}", self.model.id),
             display_name: format!("{} · NCNN/Vulkan", self.model.display_name),
             kind: EngineKind::NcnnVulkan,
-            available,
+            available: Command::new(&self.binary).arg("-h").output().is_ok(),
             detail: Some(format!(
                 "binary={} scale={} tile={} gpu={} tta={} models={}",
-                self.binary.display(),
-                self.model.scale,
-                self.tile_size,
-                self.gpu_id
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| "auto".into()),
+                self.binary.display(), self.model.scale, self.tile_size,
+                self.gpu_id.map(|v| v.to_string()).unwrap_or_else(|| "auto".into()),
                 self.tta,
-                self.model_dir
-                    .as_ref()
-                    .map(|path| path.display().to_string())
-                    .unwrap_or_else(|| "engine-default".into())
+                self.model_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "engine-default".into())
             )),
         }
     }
 
     fn self_test(&self) -> Result<(), EngineError> {
-        let output = Command::new(&self.binary)
-            .arg("-h")
-            .output()
-            .map_err(|error| {
-                EngineError::Unavailable(format!("{}: {error}", self.binary.display()))
-            })?;
-
+        let output = Command::new(&self.binary).arg("-h").output()
+            .map_err(|error| EngineError::Unavailable(format!("{}: {error}", self.binary.display())))?;
         if output.stdout.is_empty() && output.stderr.is_empty() && !output.status.success() {
             return Err(EngineError::Unavailable(format!(
-                "{} returned status {} during self-test",
-                self.binary.display(),
-                output.status
+                "{} returned status {} during self-test", self.binary.display(), output.status
             )));
         }
-
         Ok(())
     }
 
     fn process(&self, input: &Path, output: &Path) -> Result<(), EngineError> {
         if !input.exists() {
-            return Err(EngineError::Execution(format!(
-                "input path does not exist: {}",
-                input.display()
-            )));
+            return Err(EngineError::Execution(format!("input path does not exist: {}", input.display())));
         }
-
         self.self_test()?;
-
-        let output_result = self
-            .build_command(input, output)
-            .output()
+        let result = self.command(input, output).output()
             .map_err(|error| EngineError::Execution(error.to_string()))?;
-
-        if output_result.status.success() {
-            return Ok(());
-        }
-
-        let stderr = String::from_utf8_lossy(&output_result.stderr);
-        let message = stderr
-            .lines()
-            .rev()
-            .find(|line| !line.trim().is_empty())
+        if result.status.success() { return Ok(()); }
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        let message = stderr.lines().rev().find(|line| !line.trim().is_empty())
             .unwrap_or("Real-ESRGAN NCNN process failed");
-
         Err(EngineError::Execution(message.to_string()))
+    }
+}
+
+impl DirectoryCliEngine for RealEsrganNcnnEngine {
+    fn build_directory_command(&self, input: &Path, output: &Path) -> Command {
+        self.command(input, output)
     }
 }

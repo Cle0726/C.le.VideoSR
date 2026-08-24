@@ -13,6 +13,8 @@ pub struct ModelManifest {
     pub task: String,
     pub engine: String,
     pub scale: u32,
+    #[serde(default)]
+    pub frame_multiplier: Option<u32>,
     pub content: String,
     pub model_stem: String,
     pub bundled: bool,

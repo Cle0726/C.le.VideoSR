@@ -6,12 +6,18 @@ use core::processing::{
     cancel_processing as cancel_job, start_processing as start_job, ProcessingRequest, ProcessingState,
     StartJobResponse,
 };
+use core::runtime::{detect_media_runtime as inspect_runtime, MediaRuntimeInfo};
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
 fn detect_hardware() -> HardwareInfo {
     detect_hardware_info()
+}
+
+#[tauri::command]
+fn detect_media_runtime() -> MediaRuntimeInfo {
+    inspect_runtime()
 }
 
 #[tauri::command]
@@ -39,6 +45,7 @@ pub fn run() {
         .manage(ProcessingState::default())
         .invoke_handler(tauri::generate_handler![
             detect_hardware,
+            detect_media_runtime,
             probe_media,
             start_processing,
             cancel_processing

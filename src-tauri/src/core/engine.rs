@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{path::Path, process::Command};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +34,14 @@ pub trait EnhancementEngine: Send + Sync {
     fn descriptor(&self) -> EngineDescriptor;
     fn self_test(&self) -> Result<(), EngineError>;
     fn process(&self, input: &Path, output: &Path) -> Result<(), EngineError>;
+}
+
+/// CLI backends that can process a directory of decoded frames in one invocation.
+///
+/// This is intentionally separate from `EnhancementEngine`: future native-library,
+/// TensorRT and Python-worker backends do not need to expose a process command.
+pub trait DirectoryCliEngine: EnhancementEngine {
+    fn build_directory_command(&self, input: &Path, output: &Path) -> Command;
 }
 
 pub struct EngineRegistry {

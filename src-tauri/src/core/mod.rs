@@ -7,5 +7,6 @@ pub mod models;
 pub mod ncnn;
 pub mod pipeline;
 pub mod processing;
+pub mod realcugan;
 pub mod realesrgan;
 pub mod runtime;

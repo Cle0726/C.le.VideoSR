@@ -7,11 +7,11 @@ C.le.VideoSR is designed as a desktop application for video restoration, super-r
 ## Direction
 
 - Local processing by default
-- Stream-oriented decode -> process -> encode pipeline
+- Bounded decode -> enhance -> encode orchestration
 - Hardware-aware engine selection
 - Fast / Quality / AI Restore user modes
 - Pluggable inference backends (NCNN/Vulkan first, TensorRT and PyTorch workers later)
-- Resume-friendly jobs and bounded frame queues
+- Resume-friendly jobs and bounded temporary storage
 - FFmpeg-based media I/O
 
 ## Current milestone: M2 fast enhancement backend
@@ -26,17 +26,54 @@ The repository now contains:
 - FFmpeg `-progress` parsing and live Tauri progress events
 - Structured FFmpeg error-log events and failure messages
 - FFmpeg runtime and encoder self-test (`ffmpeg`, `ffprobe`, `libx264`, `libx265`)
-- H.264 / H.265 / source-video-copy output modes
-- MP4-safe AAC audio output for the validation pipeline
+- H.264 / H.265 output plus an M1 stream-copy validation path
 - Rust hardware capability boundary
 - Job and multi-stage enhancement pipeline domain models
 - Pluggable inference engine interface and registry
 - Versioned model manifest catalog
+- Managed NCNN runtime resolution with source-checkout `PATH` fallback
+- Runtime/model manifest verifier for CI and release staging
 - NCNN runtime probes for Real-ESRGAN, Real-CUGAN and RIFE
-- First `RealEsrganNcnnEngine` implementation with scale, tile, GPU and TTA controls
-- GitHub CI for frontend build and Rust `cargo check`
+- `RealEsrganNcnnEngine` with scale, tile, GPU, TTA and managed-model-directory support
+- End-to-end Real-ESRGAN video upscale command exposed to the desktop UI
+- Bounded chunk frame spool: only a short source/enhanced chunk is stored at a time
+- One long-lived FFmpeg image-pipe encoder, so enhanced frames are encoded once instead of per chunk
+- Audio/metadata remux after enhancement
+- Cancellable AI jobs with temporary-directory and child-process cleanup
+- GitHub CI for manifest validation, frontend build and Rust `cargo check`
 
-The current visible processing button still validates the local media pipeline only. The Real-ESRGAN engine adapter exists in the core, but video frame streaming is not connected to it yet, so the UI does not claim AI super-resolution is active.
+## Current Fast-mode flow
+
+```text
+Input video
+   ↓
+ffprobe
+   ↓
+2-second bounded frame chunk
+   ↓
+Real-ESRGAN NCNN/Vulkan
+   ↓
+enhanced PNG frames
+   ↓
+one persistent FFmpeg image2pipe encoder
+   ↓
+next chunk (previous chunk deleted)
+   ↓
+restore source audio + metadata
+   ↓
+output video
+```
+
+The current CLI-backed NCNN integration intentionally uses bounded temporary PNG chunks because upstream `realesrgan-ncnn-vulkan` accepts files/directories rather than an FFmpeg raw-frame pipe. A future native-library backend can replace this spool layer without changing the desktop/job API.
+
+## Current limitations
+
+- NCNN binaries and model payloads are not committed or redistributed yet; license review is required before release bundling.
+- Development builds can use `PATH`, `CLE_VIDEOSR_RUNTIME_DIR` and `CLE_VIDEOSR_MODEL_DIR`.
+- The current image-pipe encoder uses the probed frame rate. Variable-frame-rate sources are therefore normalized to that rate in M2.
+- Audio is remuxed/transcoded after enhancement; subtitle-stream restoration is not implemented yet.
+- Quality and AI Restore modes are visible product tiers but remain disabled until their backends land.
+- Automatic tile selection currently delegates to the NCNN engine (`tile=0`); VRAM-aware C.le. tile policy is still planned.
 
 ## Milestones
 
@@ -54,10 +91,15 @@ The current visible processing button still validates the local media pipeline o
 - [x] NCNN runtime probing
 - [x] Versioned Real-ESRGAN model manifests
 - [x] Real-ESRGAN NCNN engine adapter
+- [x] Bounded chunk frame hand-off
+- [x] Single-pass enhanced-frame encoding
+- [x] End-to-end video super-resolution job
+- [x] Managed NCNN runtime/model path resolution
+- [x] Runtime manifest and validation script
 - [ ] Real-CUGAN adapter
-- [ ] Automatic tile sizing from GPU memory
-- [ ] Bounded streaming frame hand-off
-- [ ] End-to-end video super-resolution job
+- [ ] VRAM-aware automatic tile policy
+- [ ] Reviewed runtime/model payload packaging
+- [ ] VFR timestamp-preserving frame transport
 
 ### M3 - Frame interpolation
 - [ ] RIFE adapter
@@ -81,16 +123,23 @@ Requirements:
 - Rust stable
 - Tauri 2 system prerequisites
 - FFmpeg (`ffmpeg` and `ffprobe`) available on `PATH` during development
-- NCNN executables are currently discovered from `PATH`; managed sidecars are planned for release builds
+- Real-ESRGAN NCNN/Vulkan available either through the managed runtime layout or `PATH` to run Fast AI enhancement
 
 ```bash
 npm install
+npm run runtime:verify
 npm run tauri dev
 ```
 
-If the application reports that `ffprobe` or `ffmpeg` is missing, install FFmpeg or add its binaries to `PATH`. A managed FFmpeg runtime is planned so end users will not need to configure this manually in a release build.
+For a strict staged-runtime check:
 
-No inference binary or model is bundled yet. `models/manifest.json` describes supported model profiles, while runtime binaries and model licensing remain separate until distribution review is complete.
+```bash
+npm run runtime:verify:strict
+```
+
+Managed runtime layout and overrides are documented in [`docs/runtime-layout.md`](docs/runtime-layout.md). The Tauri bundle maps staged `runtime/` payloads into the application resources directory, while large binaries/model files remain ignored by Git.
+
+No inference binary or model payload is bundled in this source repository yet. `models/manifest.json` describes supported model profiles and `runtime/manifest.json` describes expected runtime components; redistribution remains gated on per-component license review.
 
 ## Architecture
 

@@ -20,30 +20,36 @@ The repository now contains:
 
 - Tauri 2 + React + TypeScript desktop shell
 - Initial C.le. dark workstation UI
-- Native local video picker
+- Native local input and output file pickers
 - `ffprobe` media inspection for resolution, FPS, duration, codec, pixel format, audio and container
+- Cancellable Rust-owned FFmpeg child processes
+- FFmpeg `-progress` parsing and live Tauri progress events
+- H.264 / H.265 / source-video-copy output modes
+- MP4-safe AAC audio output for the validation pipeline
 - Rust hardware capability boundary
 - Job and multi-stage enhancement pipeline domain models
 - Pluggable inference engine interface
 - GitHub CI for frontend build and Rust `cargo check`
 
-M1 is not complete yet. The next work is output selection, FFmpeg process control, structured progress/cancellation and the first streaming job path.
+The current processing button intentionally validates the local media pipeline only. It does not claim to perform AI super-resolution yet.
 
 ## Milestones
 
 ### M1 - Local media pipeline
 - [x] Import video
 - [x] Probe metadata with ffprobe
-- [ ] Select output path and codec
-- [ ] Start/cancel a processing job
-- [ ] Structured progress and logs
-- [ ] Bounded streaming media path
+- [x] Select output path and codec
+- [x] Start/cancel a processing job
+- [x] Live structured progress events
+- [ ] Structured FFmpeg error/log capture
+- [ ] Managed FFmpeg runtime for release builds
 
 ### M2 - Fast enhancement backend
+- [ ] NCNN/Vulkan runtime detection
 - [ ] NCNN/Vulkan adapter
 - [ ] Real-ESRGAN / Real-CUGAN model manifests
 - [ ] Automatic tile sizing
-- [ ] Streaming frame hand-off
+- [ ] Bounded streaming frame hand-off
 
 ### M3 - Frame interpolation
 - [ ] RIFE adapter
@@ -66,16 +72,16 @@ Requirements:
 - Node.js 20+
 - Rust stable
 - Tauri 2 system prerequisites
-- FFmpeg available on `PATH` for current M1 media probing
+- FFmpeg (`ffmpeg` and `ffprobe`) available on `PATH` during M1 development
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-If the application reports that `ffprobe` is missing, install FFmpeg or add its binaries to `PATH`. A managed FFmpeg runtime is planned so end users will not need to configure this manually in a release build.
+If the application reports that `ffprobe` or `ffmpeg` is missing, install FFmpeg or add its binaries to `PATH`. A managed FFmpeg runtime is planned so end users will not need to configure this manually in a release build.
 
-No inference model is bundled yet. The architecture is being established before the first NCNN/Vulkan backend lands.
+No inference model is bundled yet. The first AI backend will be NCNN/Vulkan so the Fast mode can support a broad range of NVIDIA, AMD and Intel GPUs without requiring CUDA.
 
 ## Architecture
 

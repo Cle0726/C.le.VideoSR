@@ -10,3 +10,4 @@ pub mod processing;
 pub mod realcugan;
 pub mod realesrgan;
 pub mod runtime;
+pub mod upscale_engine;

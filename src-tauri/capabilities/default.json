@@ -3,5 +3,8 @@
   "identifier": "default",
   "description": "Default capabilities for the C.le.VideoSR main window",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "dialog:allow-open"
+  ]
 }

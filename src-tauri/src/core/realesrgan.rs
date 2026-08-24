@@ -5,6 +5,7 @@ use std::{
 
 use super::{
     engine::{DirectoryCliEngine, EngineDescriptor, EngineError, EngineKind, EnhancementEngine},
+    hardware::detect_hardware_info,
     models::ModelManifest,
     ncnn::{resolve_ncnn_binary, resolve_ncnn_model_dir},
 };
@@ -55,13 +56,17 @@ impl RealEsrganNcnnEngine {
         self
     }
 
-    pub fn with_tile_size(mut self, tile_size: u32) -> Result<Self, EngineError> {
-        if tile_size != 0 && tile_size < 32 {
+    pub fn with_tile_size(mut self, requested: u32) -> Result<Self, EngineError> {
+        if requested != 0 && requested < 32 {
             return Err(EngineError::Configuration(
-                "tile size must be 0 (auto) or at least 32".into(),
+                "tile size must be 0 (C.le auto) or at least 32".into(),
             ));
         }
-        self.tile_size = tile_size;
+        self.tile_size = if requested == 0 {
+            detect_hardware_info().recommended_ncnn_tile
+        } else {
+            requested
+        };
         Ok(self)
     }
 

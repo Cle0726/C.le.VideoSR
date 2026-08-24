@@ -13,8 +13,21 @@ src-tauri/target/
 .idea/
 .vscode/
 
-# Local runtime/model payloads
-runtime/
-models/
+# Local runtime payloads: manifests stay tracked, binaries/models do not.
+runtime/bin/
+runtime/models/
+runtime/cache/
+runtime/downloads/
+
+# Optional local model payloads outside the managed runtime.
+models/payload/
+models/**/*.bin
+models/**/*.param
+models/**/*.onnx
+models/**/*.engine
+models/**/*.pth
+models/**/*.pt
+models/**/*.safetensors
+
 cache/
 output/

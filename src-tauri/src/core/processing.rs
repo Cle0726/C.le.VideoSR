@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{BufRead, BufReader},
     path::Path,
     process::{Child, Command, Stdio},
@@ -12,6 +12,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 #[derive(Debug, Default)]
 pub struct ProcessingState {
     jobs: Mutex<HashMap<String, Arc<Mutex<Child>>>>,
+    cancelled: Mutex<HashSet<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,6 +65,16 @@ pub fn start_processing(
 
     if input == output {
         return Err("Output path must be different from the input video.".into());
+    }
+
+    if output.file_name().is_none() {
+        return Err("Output path must include a file name.".into());
+    }
+
+    if let Some(parent) = output.parent() {
+        if !parent.as_os_str().is_empty() && !parent.is_dir() {
+            return Err("Output directory does not exist.".into());
+        }
     }
 
     let codec = codec_args(&request.video_codec)?;
@@ -170,11 +181,34 @@ pub fn start_processing(
         }
 
         let exit_status = child.lock().ok().and_then(|mut child| child.wait().ok());
+        let mut was_cancelled = false;
 
-        if let Ok(state) = thread_app.try_state::<ProcessingState>() {
+        if let Some(state) = thread_app.try_state::<ProcessingState>() {
             if let Ok(mut jobs) = state.jobs.lock() {
                 jobs.remove(&thread_job_id);
             }
+            if let Ok(mut cancelled) = state.cancelled.lock() {
+                was_cancelled = cancelled.remove(&thread_job_id);
+            }
+        }
+
+        if was_cancelled {
+            emit_event(
+                &thread_app,
+                ProcessingEvent {
+                    job_id: thread_job_id,
+                    status: "cancelled".into(),
+                    progress: if duration > 0.0 {
+                        (out_time_seconds / duration * 100.0).clamp(0.0, 99.9)
+                    } else {
+                        0.0
+                    },
+                    out_time_seconds,
+                    speed,
+                    message: Some("Processing cancelled".into()),
+                },
+            );
+            return;
         }
 
         match exit_status {
@@ -233,6 +267,12 @@ pub fn cancel_processing(state: State<'_, ProcessingState>, job_id: String) -> R
     let Some(child) = child else {
         return Ok(false);
     };
+
+    state
+        .cancelled
+        .lock()
+        .map_err(|_| "Processing cancellation lock is poisoned.".to_string())?
+        .insert(job_id);
 
     child
         .lock()

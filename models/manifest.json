@@ -55,6 +55,30 @@
       "model_stem": "models-se",
       "bundled": false,
       "license_status": "review_required"
+    },
+    {
+      "id": "rife-v4.6-x2",
+      "display_name": "RIFE v4.6 · 2× FPS",
+      "task": "frame_interpolation",
+      "engine": "rife-ncnn-vulkan",
+      "scale": 1,
+      "frame_multiplier": 2,
+      "content": "general",
+      "model_stem": "rife-v4.6",
+      "bundled": false,
+      "license_status": "review_required"
+    },
+    {
+      "id": "rife-anime-x2",
+      "display_name": "RIFE Anime · 2× FPS",
+      "task": "frame_interpolation",
+      "engine": "rife-ncnn-vulkan",
+      "scale": 1,
+      "frame_multiplier": 2,
+      "content": "animation",
+      "model_stem": "rife-anime",
+      "bundled": false,
+      "license_status": "review_required"
     }
   ]
 }

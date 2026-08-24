@@ -11,7 +11,9 @@ use core::processing::{
     cancel_processing as cancel_job, start_processing as start_job, ProcessingRequest, ProcessingState,
     StartJobResponse,
 };
-use core::runtime::{detect_media_runtime as inspect_runtime, MediaRuntimeInfo};
+use core::runtime::{
+    configure_managed_runtime_path, detect_media_runtime as inspect_runtime, MediaRuntimeInfo,
+};
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
@@ -64,6 +66,8 @@ fn cancel_upscale(state: State<'_, UpscaleState>, job_id: String) -> Result<bool
 }
 
 pub fn run() {
+    let _managed_runtime = configure_managed_runtime_path();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(ProcessingState::default())

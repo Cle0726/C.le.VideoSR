@@ -1,5 +1,9 @@
 mod core;
 
+use core::ai_upscale::{
+    cancel_upscale as cancel_ai_job, start_upscale as start_ai_job, StartUpscaleResponse,
+    UpscaleRequest, UpscaleState,
+};
 use core::hardware::{detect_hardware_info, HardwareInfo};
 use core::media::{probe_media as inspect_media, MediaProbe};
 use core::ncnn::{detect_ncnn_runtime as inspect_ncnn_runtime, NcnnRuntimeInfo};
@@ -8,10 +12,6 @@ use core::processing::{
     StartJobResponse,
 };
 use core::runtime::{detect_media_runtime as inspect_runtime, MediaRuntimeInfo};
-use core::upscale::{
-    cancel_upscale as cancel_ai_job, start_upscale as start_ai_job, StartUpscaleResponse,
-    UpscaleRequest, UpscaleState,
-};
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
 

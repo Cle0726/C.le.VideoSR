@@ -24,6 +24,8 @@ pub struct EngineDescriptor {
 pub enum EngineError {
     #[error("engine is unavailable: {0}")]
     Unavailable(String),
+    #[error("invalid engine configuration: {0}")]
+    Configuration(String),
     #[error("engine execution failed: {0}")]
     Execution(String),
 }
@@ -52,6 +54,13 @@ impl EngineRegistry {
 
     pub fn descriptors(&self) -> Vec<EngineDescriptor> {
         self.engines.iter().map(|engine| engine.descriptor()).collect()
+    }
+
+    pub fn get(&self, id: &str) -> Option<&dyn EnhancementEngine> {
+        self.engines
+            .iter()
+            .find(|engine| engine.descriptor().id == id)
+            .map(|engine| engine.as_ref())
     }
 }
 

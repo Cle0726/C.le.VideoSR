@@ -14,7 +14,7 @@ C.le.VideoSR is designed as a desktop application for video restoration, super-r
 - Resume-friendly jobs and bounded frame queues
 - FFmpeg-based media I/O
 
-## Current milestone: M1 local media pipeline
+## Current milestone: M2 fast enhancement backend
 
 The repository now contains:
 
@@ -24,14 +24,19 @@ The repository now contains:
 - `ffprobe` media inspection for resolution, FPS, duration, codec, pixel format, audio and container
 - Cancellable Rust-owned FFmpeg child processes
 - FFmpeg `-progress` parsing and live Tauri progress events
+- Structured FFmpeg error-log events and failure messages
+- FFmpeg runtime and encoder self-test (`ffmpeg`, `ffprobe`, `libx264`, `libx265`)
 - H.264 / H.265 / source-video-copy output modes
 - MP4-safe AAC audio output for the validation pipeline
 - Rust hardware capability boundary
 - Job and multi-stage enhancement pipeline domain models
-- Pluggable inference engine interface
+- Pluggable inference engine interface and registry
+- Versioned model manifest catalog
+- NCNN runtime probes for Real-ESRGAN, Real-CUGAN and RIFE
+- First `RealEsrganNcnnEngine` implementation with scale, tile, GPU and TTA controls
 - GitHub CI for frontend build and Rust `cargo check`
 
-The current processing button intentionally validates the local media pipeline only. It does not claim to perform AI super-resolution yet.
+The current visible processing button still validates the local media pipeline only. The Real-ESRGAN engine adapter exists in the core, but video frame streaming is not connected to it yet, so the UI does not claim AI super-resolution is active.
 
 ## Milestones
 
@@ -41,15 +46,18 @@ The current processing button intentionally validates the local media pipeline o
 - [x] Select output path and codec
 - [x] Start/cancel a processing job
 - [x] Live structured progress events
-- [ ] Structured FFmpeg error/log capture
+- [x] Structured FFmpeg error/log capture
+- [x] Runtime/encoder self-test
 - [ ] Managed FFmpeg runtime for release builds
 
 ### M2 - Fast enhancement backend
-- [ ] NCNN/Vulkan runtime detection
-- [ ] NCNN/Vulkan adapter
-- [ ] Real-ESRGAN / Real-CUGAN model manifests
-- [ ] Automatic tile sizing
+- [x] NCNN runtime probing
+- [x] Versioned Real-ESRGAN model manifests
+- [x] Real-ESRGAN NCNN engine adapter
+- [ ] Real-CUGAN adapter
+- [ ] Automatic tile sizing from GPU memory
 - [ ] Bounded streaming frame hand-off
+- [ ] End-to-end video super-resolution job
 
 ### M3 - Frame interpolation
 - [ ] RIFE adapter
@@ -72,7 +80,8 @@ Requirements:
 - Node.js 20+
 - Rust stable
 - Tauri 2 system prerequisites
-- FFmpeg (`ffmpeg` and `ffprobe`) available on `PATH` during M1 development
+- FFmpeg (`ffmpeg` and `ffprobe`) available on `PATH` during development
+- NCNN executables are currently discovered from `PATH`; managed sidecars are planned for release builds
 
 ```bash
 npm install
@@ -81,7 +90,7 @@ npm run tauri dev
 
 If the application reports that `ffprobe` or `ffmpeg` is missing, install FFmpeg or add its binaries to `PATH`. A managed FFmpeg runtime is planned so end users will not need to configure this manually in a release build.
 
-No inference model is bundled yet. The first AI backend will be NCNN/Vulkan so the Fast mode can support a broad range of NVIDIA, AMD and Intel GPUs without requiring CUDA.
+No inference binary or model is bundled yet. `models/manifest.json` describes supported model profiles, while runtime binaries and model licensing remain separate until distribution review is complete.
 
 ## Architecture
 

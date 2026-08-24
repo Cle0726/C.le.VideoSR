@@ -15,10 +15,9 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use super::{
-    engine::EnhancementEngine,
     models::bundled_model_catalog,
     processing::ProcessingEvent,
-    realesrgan::RealEsrganNcnnEngine,
+    upscale_engine::NcnnUpscaleEngine,
 };
 
 const CANCELLED: &str = "__C_LE_CANCELLED__";
@@ -296,7 +295,7 @@ fn process_video(
     id: &str,
     cancel: &AtomicBool,
     request: &UpscaleRequest,
-    engine: &RealEsrganNcnnEngine,
+    engine: &NcnnUpscaleEngine,
     work_root: &Path,
 ) -> Result<(), String> {
     let input = Path::new(&request.input_path);
@@ -384,12 +383,12 @@ fn process_video(
         run(
             engine.build_command(&source_frames, &enhanced_frames),
             cancel,
-            "Real-ESRGAN NCNN",
+            "NCNN upscale engine",
         )?;
 
         let frames = png_frames(&enhanced_frames)?;
         if frames.is_empty() {
-            return Err(format!("Real-ESRGAN produced no frames for chunk {}.", index + 1));
+            return Err(format!("NCNN engine produced no frames for chunk {}.", index + 1));
         }
 
         emit(
@@ -474,19 +473,14 @@ pub fn start_upscale(
         .into_iter()
         .find(|model| model.id == request.model_id)
         .ok_or_else(|| format!("Unknown model profile: {}", request.model_id))?;
-    if model.engine != "realesrgan-ncnn-vulkan" {
-        return Err(format!("Model {} does not target Real-ESRGAN NCNN.", model.id));
-    }
 
-    let mut engine = RealEsrganNcnnEngine::new("realesrgan-ncnn-vulkan", model)
-        .map_err(|error| error.to_string())?
-        .with_tile_size(request.tile_size.unwrap_or(0))
-        .map_err(|error| error.to_string())?;
-    if let Some(gpu_id) = request.gpu_id {
-        engine = engine.with_gpu_id(gpu_id);
-    }
-    engine = engine.with_tta(request.tta.unwrap_or(false));
-    engine.self_test().map_err(|error| error.to_string())?;
+    let engine = NcnnUpscaleEngine::from_model(
+        model,
+        request.tile_size.unwrap_or(0),
+        request.gpu_id,
+        request.tta.unwrap_or(false),
+    )?;
+    engine.self_test()?;
 
     let id = job_id()?;
     let cancel = Arc::new(AtomicBool::new(false));

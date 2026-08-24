@@ -1,0 +1,31 @@
+.target-resolution {
+  margin: 13px 0 -4px !important;
+  color: #a9c9ed !important;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.action-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.secondary-button {
+  width: 100%;
+  margin-top: 2px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #9bacc0;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: rgba(143, 185, 238, 0.18);
+  color: #bfd0e3;
+}
+
+.run-button {
+  box-shadow: 0 8px 22px rgba(36, 77, 130, 0.16);
+}

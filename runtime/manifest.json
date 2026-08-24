@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "runtime_id": "c-le-videosr-ncnn",
+  "runtime_id": "c-le-videosr-runtime",
   "layout": {
     "binary_dir": "runtime/bin",
     "model_dir": "runtime/models"
@@ -11,6 +11,18 @@
   },
   "binaries": [
     {
+      "id": "ffmpeg",
+      "required_for": ["media_pipeline", "video_super_resolution"],
+      "required": true,
+      "license_review": "required_before_distribution"
+    },
+    {
+      "id": "ffprobe",
+      "required_for": ["media_probe", "video_super_resolution"],
+      "required": true,
+      "license_review": "required_before_distribution"
+    },
+    {
       "id": "realesrgan-ncnn-vulkan",
       "required_for": ["fast_super_resolution"],
       "required": true,
@@ -18,7 +30,7 @@
     },
     {
       "id": "realcugan-ncnn-vulkan",
-      "required_for": ["fast_super_resolution"],
+      "required_for": ["fast_super_resolution_animation"],
       "required": false,
       "license_review": "required_before_distribution"
     },
@@ -31,7 +43,8 @@
   ],
   "notes": [
     "Large runtime binaries and model payloads are intentionally not committed to Git.",
-    "Development builds may fall back to binaries available on PATH.",
+    "The application prepends a staged runtime/bin directory to its child-process PATH.",
+    "Development builds may fall back to binaries already available on the system PATH.",
     "Release packaging must verify each third-party runtime and model license before redistribution."
   ]
 }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     io::{BufRead, BufReader},
     path::Path,
     process::{Child, Command, Stdio},
@@ -36,6 +36,13 @@ pub struct ProcessingEvent {
     pub out_time_seconds: f64,
     pub speed: Option<String>,
     pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProcessingLogEvent {
+    pub job_id: String,
+    pub level: String,
+    pub message: String,
 }
 
 fn codec_args(codec: &str) -> Result<Vec<&'static str>, String> {
@@ -106,7 +113,7 @@ pub fn start_processing(
         .arg("-nostats")
         .arg(output)
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
 
     let mut child = command
         .spawn()
@@ -116,6 +123,10 @@ pub fn start_processing(
         .stdout
         .take()
         .ok_or_else(|| "Unable to read FFmpeg progress output.".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Unable to read FFmpeg error output.".to_string())?;
 
     let job_id = format!(
         "job-{}-{}",
@@ -150,6 +161,30 @@ pub fn start_processing(
     );
 
     thread::spawn(move || {
+        let error_lines = Arc::new(Mutex::new(VecDeque::<String>::with_capacity(20)));
+        let stderr_lines = Arc::clone(&error_lines);
+        let stderr_app = thread_app.clone();
+        let stderr_job_id = thread_job_id.clone();
+        let stderr_thread = thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().map_while(Result::ok) {
+                if let Ok(mut buffer) = stderr_lines.lock() {
+                    if buffer.len() >= 20 {
+                        buffer.pop_front();
+                    }
+                    buffer.push_back(line.clone());
+                }
+                let _ = stderr_app.emit(
+                    "job-log",
+                    ProcessingLogEvent {
+                        job_id: stderr_job_id.clone(),
+                        level: "error".into(),
+                        message: line,
+                    },
+                );
+            }
+        });
+
         let reader = BufReader::new(stdout);
         let mut out_time_seconds = 0.0;
         let mut speed: Option<String> = None;
@@ -183,6 +218,11 @@ pub fn start_processing(
         }
 
         let exit_status = child.lock().ok().and_then(|mut child| child.wait().ok());
+        let _ = stderr_thread.join();
+        let last_error = error_lines
+            .lock()
+            .ok()
+            .and_then(|buffer| buffer.back().cloned());
         let mut was_cancelled = false;
 
         if let Some(state) = thread_app.try_state::<ProcessingState>() {
@@ -237,7 +277,7 @@ pub fn start_processing(
                     },
                     out_time_seconds,
                     speed,
-                    message: Some(format!("FFmpeg exited with status {status}")),
+                    message: Some(last_error.unwrap_or_else(|| format!("FFmpeg exited with status {status}"))),
                 },
             ),
             None => emit_event(
@@ -248,7 +288,7 @@ pub fn start_processing(
                     progress: 0.0,
                     out_time_seconds,
                     speed,
-                    message: Some("Unable to read FFmpeg exit status".into()),
+                    message: Some(last_error.unwrap_or_else(|| "Unable to read FFmpeg exit status".into())),
                 },
             ),
         }

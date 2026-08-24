@@ -11,6 +11,14 @@ type HardwareInfo = {
   gpu_hint: string | null;
 };
 
+type MediaRuntimeInfo = {
+  ffmpeg_available: boolean;
+  ffprobe_available: boolean;
+  ffmpeg_version: string | null;
+  libx264: boolean;
+  libx265: boolean;
+};
+
 type MediaProbe = {
   path: string;
   duration_seconds: number | null;
@@ -49,9 +57,7 @@ function formatDuration(seconds: number | null) {
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const secs = total % 60;
-  return [hours, minutes, secs]
-    .map((value) => String(value).padStart(2, "0"))
-    .join(":");
+  return [hours, minutes, secs].map((value) => String(value).padStart(2, "0")).join(":");
 }
 
 function fileName(path: string) {
@@ -71,6 +77,7 @@ export default function App() {
   const [mode, setMode] = useState<Mode>("fast");
   const [hardware, setHardware] = useState<HardwareInfo | null>(null);
   const [hardwareError, setHardwareError] = useState<string | null>(null);
+  const [runtime, setRuntime] = useState<MediaRuntimeInfo | null>(null);
   const [media, setMedia] = useState<MediaProbe | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [probing, setProbing] = useState(false);
@@ -88,7 +95,19 @@ export default function App() {
     invoke<HardwareInfo>("detect_hardware")
       .then(setHardware)
       .catch((error) => setHardwareError(String(error)));
+    invoke<MediaRuntimeInfo>("detect_media_runtime")
+      .then(setRuntime)
+      .catch(() => setRuntime(null));
   }, []);
+
+  useEffect(() => {
+    if (!runtime) return;
+    if (codec === "h264" && !runtime.libx264) {
+      setCodec(runtime.libx265 ? "h265" : "copy");
+    } else if (codec === "h265" && !runtime.libx265) {
+      setCodec(runtime.libx264 ? "h264" : "copy");
+    }
+  }, [runtime, codec]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -165,8 +184,14 @@ export default function App() {
     return selected;
   }
 
+  const codecAvailable =
+    codec === "copy" ||
+    (codec === "h264" && Boolean(runtime?.libx264)) ||
+    (codec === "h265" && Boolean(runtime?.libx265));
+  const canRun = Boolean(media && runtime?.ffmpeg_available && codecAvailable && jobStatus !== "running");
+
   async function startProcessing() {
-    if (!media || jobStatus === "running") return;
+    if (!media || !canRun) return;
     setJobMessage(null);
 
     const target = outputPath ?? (await chooseOutput());
@@ -240,9 +265,10 @@ export default function App() {
               <>
                 <h2>Select a video</h2>
                 <p>MP4 · MKV · MOV · WEBM · AVI</p>
-                <button className="primary-button" type="button" onClick={selectVideo} disabled={probing}>
+                <button className="primary-button" type="button" onClick={selectVideo} disabled={probing || runtime?.ffprobe_available === false}>
                   {probing ? "Inspecting…" : "Select video"}
                 </button>
+                {runtime?.ffprobe_available === false && <p className="error-message">ffprobe is not available in PATH.</p>}
                 {mediaError && <p className="error-message">{mediaError}</p>}
               </>
             )}
@@ -299,8 +325,8 @@ export default function App() {
               </div>
               <label className="field-label" htmlFor="codec">Video codec</label>
               <select id="codec" value={codec} onChange={(event) => setCodec(event.target.value as Codec)} disabled={jobStatus === "running"}>
-                <option value="h264">H.264 · libx264</option>
-                <option value="h265">H.265 · libx265</option>
+                <option value="h264" disabled={runtime ? !runtime.libx264 : false}>H.264 · libx264</option>
+                <option value="h265" disabled={runtime ? !runtime.libx265 : false}>H.265 · libx265</option>
                 <option value="copy">Copy source video stream</option>
               </select>
               <button className="path-button" type="button" onClick={chooseOutput} disabled={jobStatus === "running"}>
@@ -310,10 +336,11 @@ export default function App() {
               {jobStatus === "running" ? (
                 <button className="danger-button" type="button" onClick={cancelProcessing}>Cancel processing</button>
               ) : (
-                <button className="run-button" type="button" onClick={startProcessing}>
+                <button className="run-button" type="button" onClick={startProcessing} disabled={!canRun}>
                   Run media pipeline
                 </button>
               )}
+              {!runtime?.ffmpeg_available && <p className="error-message">FFmpeg is required to run the local media pipeline.</p>}
               <p className="pipeline-note">This M1 step validates decode / encode / progress / cancel. AI super-resolution is not enabled yet.</p>
             </div>
           )}
@@ -331,6 +358,20 @@ export default function App() {
               </dl>
             </div>
           )}
+
+          <div className="hardware-card">
+            <div className="section-heading">
+              <span>Runtime</span>
+              <small>{runtime?.ffmpeg_available ? "Ready" : "Unavailable"}</small>
+            </div>
+            <dl>
+              <div><dt>FFmpeg</dt><dd>{runtime?.ffmpeg_available ? "Detected" : "Missing"}</dd></div>
+              <div><dt>ffprobe</dt><dd>{runtime?.ffprobe_available ? "Detected" : "Missing"}</dd></div>
+              <div><dt>H.264</dt><dd>{runtime?.libx264 ? "libx264" : "Unavailable"}</dd></div>
+              <div><dt>H.265</dt><dd>{runtime?.libx265 ? "libx265" : "Unavailable"}</dd></div>
+            </dl>
+            {runtime?.ffmpeg_version && <p className="runtime-version" title={runtime.ffmpeg_version}>{runtime.ffmpeg_version}</p>}
+          </div>
 
           <div className="hardware-card">
             <div className="section-heading">
@@ -354,7 +395,7 @@ export default function App() {
       <section className="status-strip">
         <span>M1 ffprobe ✓</span>
         <span>M1 FFmpeg runner ✓</span>
-        <span>M1 progress / cancel ✓</span>
+        <span>M1 runtime self-test ✓</span>
         <span>M2 NCNN/Vulkan: next</span>
       </section>
     </main>

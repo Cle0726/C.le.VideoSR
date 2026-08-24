@@ -2,6 +2,7 @@ mod core;
 
 use core::hardware::{detect_hardware_info, HardwareInfo};
 use core::media::{probe_media as inspect_media, MediaProbe};
+use core::ncnn::{detect_ncnn_runtime as inspect_ncnn_runtime, NcnnRuntimeInfo};
 use core::processing::{
     cancel_processing as cancel_job, start_processing as start_job, ProcessingRequest, ProcessingState,
     StartJobResponse,
@@ -18,6 +19,11 @@ fn detect_hardware() -> HardwareInfo {
 #[tauri::command]
 fn detect_media_runtime() -> MediaRuntimeInfo {
     inspect_runtime()
+}
+
+#[tauri::command]
+fn detect_ncnn_runtime() -> NcnnRuntimeInfo {
+    inspect_ncnn_runtime()
 }
 
 #[tauri::command]
@@ -46,6 +52,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             detect_hardware,
             detect_media_runtime,
+            detect_ncnn_runtime,
             probe_media,
             start_processing,
             cancel_processing

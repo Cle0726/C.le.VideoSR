@@ -5,6 +5,13 @@ use core::ai_upscale::{
     UpscaleRequest, UpscaleState,
 };
 use core::hardware::{detect_hardware_info, HardwareInfo};
+use core::interpolation::{
+    cancel_interpolation as cancel_interpolation_job,
+    start_interpolation as start_interpolation_job,
+    InterpolationRequest,
+    InterpolationState,
+    StartInterpolationResponse,
+};
 use core::media::{probe_media as inspect_media, MediaProbe};
 use core::ncnn::{detect_ncnn_runtime as inspect_ncnn_runtime, NcnnRuntimeInfo};
 use core::processing::{
@@ -65,6 +72,23 @@ fn cancel_upscale(state: State<'_, UpscaleState>, job_id: String) -> Result<bool
     cancel_ai_job(state, job_id)
 }
 
+#[tauri::command]
+fn start_interpolation(
+    app: AppHandle,
+    state: State<'_, InterpolationState>,
+    request: InterpolationRequest,
+) -> Result<StartInterpolationResponse, String> {
+    start_interpolation_job(app, state, request)
+}
+
+#[tauri::command]
+fn cancel_interpolation(
+    state: State<'_, InterpolationState>,
+    job_id: String,
+) -> Result<bool, String> {
+    cancel_interpolation_job(state, job_id)
+}
+
 pub fn run() {
     let _managed_runtime = configure_managed_runtime_path();
 
@@ -72,6 +96,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(ProcessingState::default())
         .manage(UpscaleState::default())
+        .manage(InterpolationState::default())
         .invoke_handler(tauri::generate_handler![
             detect_hardware,
             detect_media_runtime,
@@ -80,7 +105,9 @@ pub fn run() {
             start_processing,
             cancel_processing,
             start_upscale,
-            cancel_upscale
+            cancel_upscale,
+            start_interpolation,
+            cancel_interpolation
         ])
         .run(tauri::generate_context!())
         .expect("error while running C.le.VideoSR");

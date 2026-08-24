@@ -8,3 +8,4 @@ pub mod pipeline;
 pub mod processing;
 pub mod realesrgan;
 pub mod runtime;
+pub mod upscale;

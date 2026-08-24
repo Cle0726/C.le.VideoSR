@@ -39,6 +39,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Validate runtime manifests
+        run: npm run runtime:verify
+
       - name: Build frontend
         run: npm run build
 

@@ -1,3 +1,4 @@
+pub mod ai_upscale;
 pub mod engine;
 pub mod hardware;
 pub mod job;
@@ -8,4 +9,3 @@ pub mod pipeline;
 pub mod processing;
 pub mod realesrgan;
 pub mod runtime;
-pub mod upscale;

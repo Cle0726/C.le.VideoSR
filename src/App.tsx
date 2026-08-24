@@ -25,6 +25,7 @@ type ModelManifest = {
   task: string;
   engine: string;
   scale: number;
+  frame_multiplier?: number | null;
   content: string;
   model_stem: string;
   bundled: boolean;
@@ -69,10 +70,11 @@ type ProcessingEvent = {
 };
 
 type StartJobResponse = { job_id: string };
+type StartInterpolationResponse = { job_id: string; output_frame_rate: number };
 type Mode = "fast" | "quality" | "restore";
 type Codec = "h264" | "h265" | "copy";
 type JobStatus = "idle" | ProcessingEvent["status"];
-type JobKind = "media" | "upscale" | null;
+type JobKind = "media" | "upscale" | "interpolation" | null;
 
 const modes: Array<{ id: Mode; title: string; detail: string }> = [
   { id: "fast", title: "Fast", detail: "NCNN/Vulkan · broad GPU support" },
@@ -80,7 +82,7 @@ const modes: Array<{ id: Mode; title: string; detail: string }> = [
   { id: "restore", title: "AI Restore", detail: "Temporal restoration · planned" },
 ];
 
-const FAST_ENGINES = new Set(["realesrgan-ncnn-vulkan", "realcugan-ncnn-vulkan"]);
+const FAST_UPSCALE_ENGINES = new Set(["realesrgan-ncnn-vulkan", "realcugan-ncnn-vulkan"]);
 
 function formatDuration(seconds: number | null) {
   if (seconds == null || !Number.isFinite(seconds)) return "Unknown";
@@ -107,6 +109,7 @@ function suggestedOutputPath(path: string) {
 function engineLabel(engine: string | undefined) {
   if (engine === "realesrgan-ncnn-vulkan") return "Real-ESRGAN";
   if (engine === "realcugan-ncnn-vulkan") return "Real-CUGAN";
+  if (engine === "rife-ncnn-vulkan") return "RIFE";
   return "NCNN";
 }
 
@@ -122,6 +125,7 @@ export default function App() {
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [codec, setCodec] = useState<Codec>("h264");
   const [selectedModelId, setSelectedModelId] = useState("");
+  const [selectedRifeModelId, setSelectedRifeModelId] = useState("");
   const [jobKind, setJobKind] = useState<JobKind>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus>("idle");
   const [jobId, setJobId] = useState<string | null>(null);
@@ -154,10 +158,21 @@ export default function App() {
 
   useEffect(() => {
     if (!ncnnRuntime || selectedModelId) return;
-    const models = ncnnRuntime.models.filter((model) => FAST_ENGINES.has(model.engine));
+    const models = ncnnRuntime.models.filter(
+      (model) => model.task === "super_resolution" && FAST_UPSCALE_ENGINES.has(model.engine),
+    );
     const preferred = models.find((model) => model.id === "realesrgan-x4plus") ?? models[0];
     if (preferred) setSelectedModelId(preferred.id);
   }, [ncnnRuntime, selectedModelId]);
+
+  useEffect(() => {
+    if (!ncnnRuntime || selectedRifeModelId) return;
+    const models = ncnnRuntime.models.filter(
+      (model) => model.task === "frame_interpolation" && model.engine === "rife-ncnn-vulkan",
+    );
+    const preferred = models.find((model) => model.id === "rife-v4.6-x2") ?? models[0];
+    if (preferred) setSelectedRifeModelId(preferred.id);
+  }, [ncnnRuntime, selectedRifeModelId]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -235,8 +250,17 @@ export default function App() {
     return selected;
   }
 
-  const aiModels = ncnnRuntime?.models.filter((model) => FAST_ENGINES.has(model.engine)) ?? [];
-  const selectedModel = aiModels.find((model) => model.id === selectedModelId) ?? null;
+  const upscaleModels =
+    ncnnRuntime?.models.filter(
+      (model) => model.task === "super_resolution" && FAST_UPSCALE_ENGINES.has(model.engine),
+    ) ?? [];
+  const interpolationModels =
+    ncnnRuntime?.models.filter(
+      (model) => model.task === "frame_interpolation" && model.engine === "rife-ncnn-vulkan",
+    ) ?? [];
+  const selectedModel = upscaleModels.find((model) => model.id === selectedModelId) ?? null;
+  const selectedRifeModel =
+    interpolationModels.find((model) => model.id === selectedRifeModelId) ?? null;
   const selectedEngineProbe =
     selectedModel?.engine === "realesrgan-ncnn-vulkan"
       ? ncnnRuntime?.realesrgan
@@ -244,12 +268,14 @@ export default function App() {
         ? ncnnRuntime?.realcugan
         : null;
   const selectedEngineAvailable = Boolean(selectedEngineProbe?.available);
-  const anyFastEngineAvailable = Boolean(ncnnRuntime?.realesrgan.available || ncnnRuntime?.realcugan.available);
+  const anyFastEngineAvailable = Boolean(
+    ncnnRuntime?.realesrgan.available || ncnnRuntime?.realcugan.available || ncnnRuntime?.rife.available,
+  );
   const codecAvailable =
     codec === "copy" ||
     (codec === "h264" && Boolean(runtime?.libx264)) ||
     (codec === "h265" && Boolean(runtime?.libx265));
-  const upscaleCodecAvailable =
+  const transformedCodecAvailable =
     codec !== "copy" &&
     ((codec === "h264" && Boolean(runtime?.libx264)) ||
       (codec === "h265" && Boolean(runtime?.libx265)));
@@ -262,13 +288,26 @@ export default function App() {
       selectedModel &&
       media.duration_seconds &&
       media.frame_rate &&
-      upscaleCodecAvailable &&
+      transformedCodecAvailable &&
+      jobStatus !== "running",
+  );
+  const canRunInterpolation = Boolean(
+    media &&
+      mode === "fast" &&
+      runtime?.ffmpeg_available &&
+      ncnnRuntime?.rife.available &&
+      selectedRifeModel &&
+      media.duration_seconds &&
+      media.frame_rate &&
+      transformedCodecAvailable &&
       jobStatus !== "running",
   );
   const targetResolution =
     media?.width && media?.height && selectedModel
       ? `${media.width * selectedModel.scale} × ${media.height * selectedModel.scale}`
       : null;
+  const interpolationMultiplier = selectedRifeModel?.frame_multiplier ?? 2;
+  const targetFps = media?.frame_rate ? media.frame_rate * interpolationMultiplier : null;
 
   function beginJob(kind: Exclude<JobKind, null>, message: string) {
     activeJobRef.current = null;
@@ -335,11 +374,57 @@ export default function App() {
     }
   }
 
+  async function startInterpolation() {
+    if (
+      !media ||
+      !selectedRifeModel ||
+      !canRunInterpolation ||
+      !media.duration_seconds ||
+      !media.frame_rate
+    ) {
+      return;
+    }
+    const target = outputPath ?? (await chooseOutput());
+    if (!target) return;
+
+    beginJob("interpolation", `Starting ${selectedRifeModel.display_name}…`);
+
+    try {
+      const response = await invoke<StartInterpolationResponse>("start_interpolation", {
+        request: {
+          input_path: media.path,
+          output_path: target,
+          model_id: selectedRifeModel.id,
+          video_codec: codec,
+          duration_seconds: media.duration_seconds,
+          frame_rate: media.frame_rate,
+          chunk_seconds: 2,
+          spatial_tta: false,
+          temporal_tta: false,
+          uhd: Boolean((media.width ?? 0) >= 3840 || (media.height ?? 0) >= 2160),
+          scene_threshold: 0.42,
+        },
+      });
+      activeJobRef.current = response.job_id;
+      setJobId(response.job_id);
+      setJobMessage(`RIFE active · target ${response.output_frame_rate.toFixed(3)} FPS`);
+    } catch (error) {
+      activeJobRef.current = null;
+      setJobStatus("failed");
+      setJobMessage(String(error));
+    }
+  }
+
   async function cancelActiveJob() {
     const currentJob = activeJobRef.current ?? jobId;
     if (!currentJob || !jobKind) return;
     try {
-      const command = jobKind === "upscale" ? "cancel_upscale" : "cancel_processing";
+      const command =
+        jobKind === "upscale"
+          ? "cancel_upscale"
+          : jobKind === "interpolation"
+            ? "cancel_interpolation"
+            : "cancel_processing";
       const cancelled = await invoke<boolean>(command, { jobId: currentJob });
       if (!cancelled) setJobMessage("The processing job is no longer active.");
       else setJobMessage("Cancelling…");
@@ -372,7 +457,7 @@ export default function App() {
                   <span>{formatDuration(media.duration_seconds)}</span>
                   <span>{media.video_codec?.toUpperCase() ?? "Codec unknown"}</span>
                 </div>
-                {targetResolution && <p className="target-resolution">AI target · {targetResolution}</p>}
+                {targetResolution && <p className="target-resolution">SR target · {targetResolution}</p>}
                 <button className="primary-button" type="button" onClick={selectVideo} disabled={probing || jobStatus === "running"}>
                   {probing ? "Inspecting…" : "Choose another video"}
                 </button>
@@ -384,7 +469,7 @@ export default function App() {
                 <button className="primary-button" type="button" onClick={selectVideo} disabled={probing || runtime?.ffprobe_available === false}>
                   {probing ? "Inspecting…" : "Select video"}
                 </button>
-                {runtime?.ffprobe_available === false && <p className="error-message">ffprobe is not available in PATH.</p>}
+                {runtime?.ffprobe_available === false && <p className="error-message">ffprobe is not available in the managed runtime or PATH.</p>}
                 {mediaError && <p className="error-message">{mediaError}</p>}
               </>
             )}
@@ -394,11 +479,17 @@ export default function App() {
             <div className="job-panel">
               <div className="job-header">
                 <div>
-                  <small>{jobKind === "upscale" ? "M2 AI UPSCALE" : "M1 MEDIA PIPELINE"}</small>
+                  <small>
+                    {jobKind === "upscale"
+                      ? "M2 AI UPSCALE"
+                      : jobKind === "interpolation"
+                        ? "M3 RIFE INTERPOLATION"
+                        : "M1 MEDIA PIPELINE"}
+                  </small>
                   <strong>
                     {jobStatus === "idle"
                       ? anyFastEngineAvailable
-                        ? "Ready for local AI enhancement"
+                        ? "Ready for local AI processing"
                         : "Media pipeline ready · AI runtime missing"
                       : jobStatus}
                   </strong>
@@ -410,7 +501,15 @@ export default function App() {
               </div>
               <div className="job-meta">
                 <span>{formatDuration(outTime)} processed</span>
-                <span>{speed ? `${speed} speed` : jobKind === "upscale" ? "NCNN chunk pipeline" : "Waiting for FFmpeg"}</span>
+                <span>
+                  {speed
+                    ? `${speed} speed`
+                    : jobKind === "upscale"
+                      ? "NCNN upscale chunks"
+                      : jobKind === "interpolation"
+                        ? "RIFE overlap chunks"
+                        : "Waiting for FFmpeg"}
+                </span>
                 {jobId && <span title={jobId}>{jobId.slice(-10)}</span>}
               </div>
               {jobMessage && <p className={jobStatus === "failed" ? "error-message" : "job-message"}>{jobMessage}</p>}
@@ -443,28 +542,52 @@ export default function App() {
             <div className="hardware-card output-card">
               <div className="section-heading">
                 <span>Enhancement</span>
-                <small>{mode === "fast" ? "M2 · NCNN/Vulkan" : "Planned backend"}</small>
+                <small>{mode === "fast" ? "M2 + M3 · NCNN/Vulkan" : "Planned backend"}</small>
               </div>
 
               {mode === "fast" && (
                 <>
-                  <label className="field-label" htmlFor="model">Model</label>
+                  <p className="subsection-title">Super resolution</p>
+                  <label className="field-label" htmlFor="model">Upscale model</label>
                   <select
                     id="model"
                     value={selectedModelId}
                     onChange={(event) => setSelectedModelId(event.target.value)}
-                    disabled={jobStatus === "running" || aiModels.length === 0}
+                    disabled={jobStatus === "running" || upscaleModels.length === 0}
                   >
-                    {aiModels.length === 0 && <option value="">No Fast-mode model profiles</option>}
-                    {aiModels.map((model) => (
+                    {upscaleModels.length === 0 && <option value="">No Fast-mode upscale profiles</option>}
+                    {upscaleModels.map((model) => (
                       <option key={model.id} value={model.id}>
                         {model.display_name} · {model.scale}× · {engineLabel(model.engine)}
                       </option>
                     ))}
                   </select>
+
+                  <div className="subsection-divider" />
+                  <p className="subsection-title">Frame interpolation</p>
+                  <label className="field-label" htmlFor="rife-model">RIFE model</label>
+                  <select
+                    id="rife-model"
+                    value={selectedRifeModelId}
+                    onChange={(event) => setSelectedRifeModelId(event.target.value)}
+                    disabled={jobStatus === "running" || interpolationModels.length === 0}
+                  >
+                    {interpolationModels.length === 0 && <option value="">No RIFE profiles</option>}
+                    {interpolationModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="interpolation-summary">
+                    <span>Target FPS</span>
+                    <strong>{targetFps ? `${targetFps.toFixed(3)} FPS` : "Unknown"}</strong>
+                  </div>
+                  <p className="pipeline-note">Scene protection · 0.42 threshold · one-frame chunk overlap</p>
                 </>
               )}
 
+              <div className="subsection-divider" />
               <label className="field-label" htmlFor="codec">Video codec</label>
               <select id="codec" value={codec} onChange={(event) => setCodec(event.target.value as Codec)} disabled={jobStatus === "running"}>
                 <option value="h264" disabled={runtime ? !runtime.libx264 : false}>H.264 · libx264</option>
@@ -484,6 +607,9 @@ export default function App() {
                   <button className="run-button" type="button" onClick={startUpscale} disabled={!canRunUpscale}>
                     Enhance video · {selectedModel ? `${selectedModel.scale}×` : "NCNN"}
                   </button>
+                  <button className="run-button interpolation-button" type="button" onClick={startInterpolation} disabled={!canRunInterpolation}>
+                    Interpolate video · {targetFps ? `${targetFps.toFixed(3)} FPS` : "RIFE"}
+                  </button>
                   <button className="secondary-button" type="button" onClick={startMediaProcessing} disabled={!canRunMedia}>
                     Validate media pipeline
                   </button>
@@ -496,12 +622,15 @@ export default function App() {
                   {engineLabel(selectedModel.engine)} runtime is not available. Add the managed runtime payload or configure the development PATH.
                 </p>
               )}
+              {mode === "fast" && ncnnRuntime?.rife.available === false && (
+                <p className="error-message">RIFE runtime is not available, so frame interpolation is disabled.</p>
+              )}
               {codec === "copy" && mode === "fast" && (
-                <p className="pipeline-note">AI enhancement creates new video frames, so H.264 or H.265 must be selected instead of stream copy.</p>
+                <p className="pipeline-note">AI transforms create new video frames, so H.264 or H.265 must be selected instead of stream copy.</p>
               )}
               {mode !== "fast" && <p className="pipeline-note">Quality and AI Restore backends are intentionally disabled until their runtimes land.</p>}
               {mode === "fast" && (
-                <p className="pipeline-note">M2 keeps only a short frame chunk on disk, streams enhanced PNG frames into one FFmpeg encoder, then removes each chunk.</p>
+                <p className="pipeline-note">Fast mode keeps bounded frame chunks on disk and uses one persistent encoder for each job.</p>
               )}
             </div>
           )}
@@ -537,7 +666,7 @@ export default function App() {
           <div className="hardware-card">
             <div className="section-heading">
               <span>AI runtime</span>
-              <small>M2 · managed / PATH fallback</small>
+              <small>M2 / M3 · managed / PATH</small>
             </div>
             <dl>
               <div>
@@ -552,7 +681,12 @@ export default function App() {
                   {ncnnRuntime?.realcugan.available ? `Detected · ${ncnnRuntime.realcugan.source}` : "Not installed"}
                 </dd>
               </div>
-              <div><dt>RIFE</dt><dd>{ncnnRuntime?.rife.available ? `Detected · ${ncnnRuntime.rife.source}` : "Not installed"}</dd></div>
+              <div>
+                <dt>RIFE</dt>
+                <dd title={ncnnRuntime?.rife.resolved_path ?? undefined}>
+                  {ncnnRuntime?.rife.available ? `Detected · ${ncnnRuntime.rife.source}` : "Not installed"}
+                </dd>
+              </div>
               <div><dt>Models</dt><dd title={ncnnRuntime?.model_dir ?? undefined}>{ncnnRuntime?.model_dir ? "Managed directory" : "Engine default / not staged"}</dd></div>
               <div><dt>Catalog</dt><dd>{ncnnRuntime ? `${ncnnRuntime.models.length} model profiles` : "Loading"}</dd></div>
             </dl>
@@ -581,9 +715,9 @@ export default function App() {
         <span>M1 media pipeline ✓</span>
         <span>M2 Real-ESRGAN ✓</span>
         <span>M2 Real-CUGAN ✓</span>
-        <span>M2 bounded video upscale ✓</span>
-        <span>M2 managed runtime staging ✓</span>
-        <span>M2 VRAM-aware tiling: next</span>
+        <span>M2 VRAM-aware tile ✓</span>
+        <span>M3 RIFE 2× pipeline ✓</span>
+        <span>M3 scene protection ✓</span>
       </section>
     </main>
   );

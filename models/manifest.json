@@ -44,6 +44,17 @@
       "model_stem": "realesr-animevideov3",
       "bundled": false,
       "license_status": "review_required"
+    },
+    {
+      "id": "realcugan-se-x2",
+      "display_name": "Real-CUGAN SE x2",
+      "task": "super_resolution",
+      "engine": "realcugan-ncnn-vulkan",
+      "scale": 2,
+      "content": "animation",
+      "model_stem": "models-se",
+      "bundled": false,
+      "license_status": "review_required"
     }
   ]
 }

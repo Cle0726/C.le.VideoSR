@@ -98,7 +98,9 @@ pub fn start_processing(
 
     command
         .arg("-c:a")
-        .arg("copy")
+        .arg("aac")
+        .arg("-b:a")
+        .arg("192k")
         .arg("-progress")
         .arg("pipe:1")
         .arg("-nostats")
@@ -272,13 +274,18 @@ pub fn cancel_processing(state: State<'_, ProcessingState>, job_id: String) -> R
         .cancelled
         .lock()
         .map_err(|_| "Processing cancellation lock is poisoned.".to_string())?
-        .insert(job_id);
+        .insert(job_id.clone());
 
-    child
+    if let Err(error) = child
         .lock()
         .map_err(|_| "FFmpeg process lock is poisoned.".to_string())?
         .kill()
-        .map_err(|error| format!("Unable to cancel FFmpeg job: {error}"))?;
+    {
+        if let Ok(mut cancelled) = state.cancelled.lock() {
+            cancelled.remove(&job_id);
+        }
+        return Err(format!("Unable to cancel FFmpeg job: {error}"));
+    }
 
     Ok(true)
 }

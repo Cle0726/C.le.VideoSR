@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "runtime_id": "c-le-videosr-ncnn",
+  "layout": {
+    "binary_dir": "runtime/bin",
+    "model_dir": "runtime/models"
+  },
+  "environment_overrides": {
+    "runtime_dir": "CLE_VIDEOSR_RUNTIME_DIR",
+    "model_dir": "CLE_VIDEOSR_MODEL_DIR"
+  },
+  "binaries": [
+    {
+      "id": "realesrgan-ncnn-vulkan",
+      "required_for": ["fast_super_resolution"],
+      "required": true,
+      "license_review": "required_before_distribution"
+    },
+    {
+      "id": "realcugan-ncnn-vulkan",
+      "required_for": ["fast_super_resolution"],
+      "required": false,
+      "license_review": "required_before_distribution"
+    },
+    {
+      "id": "rife-ncnn-vulkan",
+      "required_for": ["frame_interpolation"],
+      "required": false,
+      "license_review": "required_before_distribution"
+    }
+  ],
+  "notes": [
+    "Large runtime binaries and model payloads are intentionally not committed to Git.",
+    "Development builds may fall back to binaries available on PATH.",
+    "Release packaging must verify each third-party runtime and model license before redistribution."
+  ]
+}

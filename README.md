@@ -7,14 +7,14 @@ C.le.VideoSR is designed as a desktop application for video restoration, super-r
 ## Direction
 
 - Local processing by default
-- Bounded decode -> enhance -> encode orchestration
+- Bounded decode -> AI -> encode orchestration
 - Hardware-aware engine selection
 - Fast / Quality / AI Restore user modes
 - Pluggable inference backends (NCNN/Vulkan first, TensorRT and Python workers later)
-- Resume-friendly jobs and bounded temporary storage
+- Bounded temporary storage and cancellable jobs
 - Managed FFmpeg and inference runtime layout
 
-## Current milestone: M2 fast enhancement backend
+## Current milestone: M3 frame interpolation
 
 The repository now contains:
 
@@ -29,22 +29,21 @@ The repository now contains:
 - NCNN runtime probes for Real-ESRGAN, Real-CUGAN and RIFE
 - Real-ESRGAN NCNN adapter for general/photo and animation profiles
 - Real-CUGAN NCNN adapter with its own noise/syncgap/model-directory semantics
+- RIFE NCNN adapter with general and anime 2x-FPS profiles
 - Shared directory-CLI engine boundary so video orchestration is not tied to one model
 - Fast-mode model selection between Real-ESRGAN and Real-CUGAN
 - Conservative GPU-memory detection and low-VRAM tile fallback
-- Bounded chunk frame spool: only a short source/enhanced chunk is stored at a time
-- One long-lived FFmpeg image-pipe encoder so enhanced frames are encoded once
-- Audio/metadata remux after enhancement
+- Bounded chunk super-resolution and frame-interpolation jobs
+- One long-lived FFmpeg image-pipe encoder per transformed-video job
+- Audio/metadata remux after AI processing
 - Temporary-directory and child-process cleanup on success, failure and cancellation
 
-## Current Fast-mode flow
+## Fast super-resolution flow
 
 ```text
 Input video
    ↓
-ffprobe
-   ↓
-GPU/runtime detection
+ffprobe + GPU/runtime detection
    ↓
 selected model profile
    ├─ Real-ESRGAN NCNN/Vulkan
@@ -63,7 +62,36 @@ restore source audio + metadata
 output video
 ```
 
-The current CLI-backed NCNN integration intentionally uses bounded temporary PNG chunks because the upstream portable executables accept image files/directories rather than an FFmpeg raw-frame pipe. A future native-library backend can replace this spool layer without changing the desktop/job API.
+## M3 RIFE interpolation flow
+
+```text
+Input video
+   ↓
+ffprobe
+   ↓
+short source-frame chunk
+   ↓
++ previous chunk's final source frame
+(one-frame overlap)
+   ↓
+scene-score detection
+   ↓
+RIFE NCNN/Vulkan · N -> 2N
+   ↓
+remove duplicate chunk-boundary frames
+   ↓
+replace cross-scene midpoint with next source frame
+   ↓
+one persistent FFmpeg encoder at 2x FPS
+   ↓
+restore source audio + metadata
+   ↓
+output video
+```
+
+The overlap rule is required because frame interpolation depends on pairs of neighboring source frames. Each chunk after the first includes the previous chunk's final frame. When the RIFE output is stitched together, the duplicate boundary output is removed so the chunked result follows the same frame-count behavior as the upstream directory-mode `N -> 2N` pipeline.
+
+Scene protection is deliberately conservative. Each short source chunk is scanned with FFmpeg's scene score (current threshold `0.42`). When a detected cut lies between two source frames, C.le. does not use the synthesized midpoint across that cut; it uses the next source frame instead. This avoids the most obvious cross-shot morphing without pretending to be a full semantic scene detector.
 
 ## GPU / tile behavior
 
@@ -78,8 +106,11 @@ GPU memory detection currently uses `nvidia-smi` when available, Linux DRM VRAM 
 ## Current limitations
 
 - Runtime binaries and model payloads are not committed or redistributed yet; license review is required before release bundling.
-- The current image-pipe encoder uses the probed frame rate. Variable-frame-rate sources are normalized to that rate in M2.
-- Audio is restored after enhancement; subtitle-stream restoration is not implemented yet.
+- Current transformed-video paths use the probed source frame rate as a constant-rate timeline. Variable-frame-rate sources are therefore normalized; timestamp-preserving VFR transport remains planned.
+- RIFE UI currently exposes 2x FPS. The model/schema is prepared for multipliers, but 4x has not been enabled yet.
+- Scene protection is a short-chunk FFmpeg scene-score heuristic, not semantic shot-boundary analysis.
+- Audio is restored after AI processing; subtitle-stream restoration is not implemented yet.
+- Super-resolution and frame interpolation are currently separate jobs in the UI; a combined one-click SR + RIFE pipeline is not yet wired.
 - Quality and AI Restore modes remain disabled until their backends land.
 - GPU detection is advisory and intentionally falls back to NCNN defaults when memory information is uncertain.
 
@@ -109,9 +140,15 @@ GPU memory detection currently uses `nvidia-smi` when available, Linux DRM VRAM 
 - [ ] VFR timestamp-preserving frame transport
 
 ### M3 - Frame interpolation
-- [ ] RIFE adapter
-- [ ] Scene-change handling
-- [ ] 2x/4x FPS presets
+- [x] RIFE NCNN adapter
+- [x] Versioned RIFE model profiles
+- [x] Bounded 2x-FPS interpolation job
+- [x] One-frame overlap across chunks
+- [x] Scene-change protection heuristic
+- [x] Desktop target-FPS controls and cancellation
+- [ ] 4x FPS preset
+- [ ] Combined SR + interpolation pipeline
+- [ ] Timestamp-preserving VFR interpolation
 
 ### M4 - Quality backends
 - [ ] TensorRT/CUDA adapter

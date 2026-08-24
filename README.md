@@ -14,45 +14,50 @@ C.le.VideoSR is designed as a desktop application for video restoration, super-r
 - Resume-friendly jobs and bounded frame queues
 - FFmpeg-based media I/O
 
-## Current milestone: M0 foundation
+## Current milestone: M1 local media pipeline
 
-This repository currently contains the first application skeleton:
+The repository now contains:
 
 - Tauri 2 + React + TypeScript desktop shell
-- Rust core boundary
-- Hardware capability probing
-- Pipeline and job domain models
-- Engine adapter interface
 - Initial C.le. dark workstation UI
+- Native local video picker
+- `ffprobe` media inspection for resolution, FPS, duration, codec, pixel format, audio and container
+- Rust hardware capability boundary
+- Job and multi-stage enhancement pipeline domain models
+- Pluggable inference engine interface
+- GitHub CI for frontend build and Rust `cargo check`
 
-## Planned milestones
+M1 is not complete yet. The next work is output selection, FFmpeg process control, structured progress/cancellation and the first streaming job path.
+
+## Milestones
 
 ### M1 - Local media pipeline
-- Import video
-- Probe metadata with ffprobe
-- Select output path and codec
-- Start/cancel a processing job
-- Progress and structured logs
+- [x] Import video
+- [x] Probe metadata with ffprobe
+- [ ] Select output path and codec
+- [ ] Start/cancel a processing job
+- [ ] Structured progress and logs
+- [ ] Bounded streaming media path
 
 ### M2 - Fast enhancement backend
-- NCNN/Vulkan adapter
-- Real-ESRGAN / Real-CUGAN model manifests
-- Automatic tile sizing
-- Streaming frame hand-off
+- [ ] NCNN/Vulkan adapter
+- [ ] Real-ESRGAN / Real-CUGAN model manifests
+- [ ] Automatic tile sizing
+- [ ] Streaming frame hand-off
 
 ### M3 - Frame interpolation
-- RIFE adapter
-- Scene-change handling
-- 2x/4x FPS presets
+- [ ] RIFE adapter
+- [ ] Scene-change handling
+- [ ] 2x/4x FPS presets
 
 ### M4 - Quality backends
-- TensorRT/CUDA adapter
-- Model manager and runtime self-test
+- [ ] TensorRT/CUDA adapter
+- [ ] Model manager and runtime self-test
 
 ### M5 - AI Restore
-- Isolated Python worker protocol
-- Temporal/diffusion VSR backends
-- Chunking, VRAM-aware scheduling and crash recovery
+- [ ] Isolated Python worker protocol
+- [ ] Temporal/diffusion VSR backends
+- [ ] Chunking, VRAM-aware scheduling and crash recovery
 
 ## Development
 
@@ -61,13 +66,20 @@ Requirements:
 - Node.js 20+
 - Rust stable
 - Tauri 2 system prerequisites
+- FFmpeg available on `PATH` for current M1 media probing
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-The application does not bundle an inference model yet. M0 intentionally establishes the architecture first.
+If the application reports that `ffprobe` is missing, install FFmpeg or add its binaries to `PATH`. A managed FFmpeg runtime is planned so end users will not need to configure this manually in a release build.
+
+No inference model is bundled yet. The architecture is being established before the first NCNN/Vulkan backend lands.
+
+## Architecture
+
+See [`docs/architecture.md`](docs/architecture.md) for the runtime tiers, engine boundary, media flow and process-isolation strategy.
 
 ## License
 

@@ -1,0 +1,67 @@
+name: Windows Preview Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/windows-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-preview:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Validate runtime manifests
+        run: npm run runtime:verify
+
+      - name: Build Windows installer
+        run: npm run tauri -- build --bundles nsis
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: C.le.VideoSR-Windows-Preview
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0-preview.${{ github.run_number }}
+          name: C.le.VideoSR v0.1.0 Preview ${{ github.run_number }}
+          prerelease: true
+          generate_release_notes: false
+          body: |
+            Windows preview installer for C.le.VideoSR.
+
+            Included:
+            - C.le.VideoSR desktop application
+            - Immersive blue-gray workstation UI
+            - FFmpeg / NCNN runtime discovery and AI pipeline orchestration
+            - Real-ESRGAN / Real-CUGAN / RIFE integration code
+
+            Important preview limitation:
+            Third-party FFmpeg, NCNN binaries, and AI model payloads are not bundled in this preview while redistribution licenses and notices are being finalized. The application can still be installed and launched normally, but AI processing requires compatible runtimes/models to be staged separately or available through the development PATH.
+
+            This is a prerelease intended for installation and packaging validation, not the final end-user AI bundle.
+          files: src-tauri/target/release/bundle/nsis/*.exe
+          fail_on_unmatched_files: true

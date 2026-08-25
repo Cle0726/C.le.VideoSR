@@ -28,21 +28,49 @@ const FALLBACK_ICON_PNG: &[u8] = &[
     0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
 ];
 
-fn ensure_fallback_icon() {
+fn fallback_icon_ico() -> Vec<u8> {
+    let mut ico = Vec::with_capacity(22 + FALLBACK_ICON_PNG.len());
+
+    // ICONDIR: reserved=0, type=1 (icon), count=1.
+    ico.extend_from_slice(&[0, 0, 1, 0, 1, 0]);
+
+    // ICONDIRENTRY for one 32x32 RGBA PNG image.
+    ico.extend_from_slice(&[32, 32, 0, 0]);
+    ico.extend_from_slice(&1u16.to_le_bytes());
+    ico.extend_from_slice(&32u16.to_le_bytes());
+    ico.extend_from_slice(&(FALLBACK_ICON_PNG.len() as u32).to_le_bytes());
+    ico.extend_from_slice(&22u32.to_le_bytes());
+    ico.extend_from_slice(FALLBACK_ICON_PNG);
+
+    ico
+}
+
+fn ensure_fallback_icons() {
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let icons_dir = manifest_dir.join("icons");
-    let icon_path = icons_dir.join("icon.png");
+    let png_path = icons_dir.join("icon.png");
+    let ico_path = icons_dir.join("icon.ico");
+    let needs_png = !png_path.exists();
+    let needs_ico = !ico_path.exists();
 
-    if icon_path.exists() {
+    if !needs_png && !needs_ico {
         return;
     }
 
     fs::create_dir_all(&icons_dir).expect("create Tauri icons directory");
-    fs::write(&icon_path, FALLBACK_ICON_PNG).expect("write fallback Tauri icon");
-    println!("cargo:warning=C.le.VideoSR is using the generated fallback app icon; replace src-tauri/icons/icon.png with the final icon assets before release.");
+
+    if needs_png {
+        fs::write(&png_path, FALLBACK_ICON_PNG).expect("write fallback Tauri PNG icon");
+    }
+
+    if needs_ico {
+        fs::write(&ico_path, fallback_icon_ico()).expect("write fallback Tauri Windows ICO icon");
+    }
+
+    println!("cargo:warning=C.le.VideoSR is using generated fallback app icon assets; replace src-tauri/icons/icon.png and icon.ico with the final icon assets before release.");
 }
 
 fn main() {
-    ensure_fallback_icon();
+    ensure_fallback_icons();
     tauri_build::build()
 }

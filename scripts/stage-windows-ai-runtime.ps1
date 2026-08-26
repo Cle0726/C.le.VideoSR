@@ -52,6 +52,9 @@ try {
     if ([string]::IsNullOrWhiteSpace([string]$component.archive_url) -or [string]::IsNullOrWhiteSpace([string]$component.sha256)) {
       throw "$($component.id) must have a pinned archive URL and SHA-256 before staging"
     }
+    if ([string]::IsNullOrWhiteSpace([string]$component.license_raw_url)) {
+      throw "$($component.id) must have a pinned engine license notice URL before staging"
+    }
 
     $archive = Join-Path $tempRoot ("$($component.id).zip")
     $extract = Join-Path $tempRoot $component.id
@@ -75,9 +78,10 @@ try {
 
     $noticeDir = Join-Path $licenseRoot $component.id
     New-Item -ItemType Directory -Path $noticeDir -Force | Out-Null
-    $licenseFile = Get-ChildItem -Path $extract -Recurse -File | Where-Object { $_.Name -match '^LICENSE(\..*)?$' } | Select-Object -First 1
-    if ($null -eq $licenseFile) { throw "$($component.id) archive does not contain a LICENSE notice" }
-    Copy-Item $licenseFile.FullName (Join-Path $noticeDir "LICENSE") -Force
+    Invoke-WebRequest -Uri $component.license_raw_url -OutFile (Join-Path $noticeDir "ENGINE_LICENSE.txt")
+    if ($component.PSObject.Properties.Name -contains "model_license_raw_url" -and -not [string]::IsNullOrWhiteSpace([string]$component.model_license_raw_url)) {
+      Invoke-WebRequest -Uri $component.model_license_raw_url -OutFile (Join-Path $noticeDir "MODEL_LICENSE.txt")
+    }
     $readmeFile = Get-ChildItem -Path $extract -Recurse -File | Where-Object { $_.Name -match '^README(\..*)?$' } | Select-Object -First 1
     if ($null -ne $readmeFile) {
       Copy-Item $readmeFile.FullName (Join-Path $noticeDir "README-upstream.md") -Force
@@ -117,12 +121,15 @@ try {
       default { throw "No staging layout rule for $($component.id)" }
     }
 
+    $modelLicense = $null
+    if ($component.PSObject.Properties.Name -contains "model_license") { $modelLicense = $component.model_license }
     $staged += [PSCustomObject]@{
       component = $component.id
       version = $component.version
       sha256 = $actualHash
       source = $component.archive_url
-      license = $component.license
+      engine_license = $component.license
+      model_license = $modelLicense
     }
   }
 

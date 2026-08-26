@@ -1,0 +1,57 @@
+name: AI Runtime Stage Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ai-runtime-stage-test.yml"
+      - "runtime/sources.json"
+      - "runtime/manifest.json"
+      - "models/manifest.json"
+      - "scripts/stage-windows-ai-runtime.ps1"
+      - "scripts/verify-runtime.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stage-windows-ai-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Stage pinned NCNN runtimes and models
+        shell: pwsh
+        run: ./scripts/stage-windows-ai-runtime.ps1
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify staged runtime model readiness
+        run: npm run runtime:verify
+
+      - name: Smoke-test staged NCNN CLIs
+        shell: pwsh
+        run: |
+          & ./runtime/bin/realesrgan-ncnn-vulkan.exe -h 2>&1 | Select-Object -First 8
+          & ./runtime/bin/realcugan-ncnn-vulkan.exe -h 2>&1 | Select-Object -First 8
+          & ./runtime/bin/rife-ncnn-vulkan.exe -h 2>&1 | Select-Object -First 8
+
+      - name: Upload staging manifest and notices
+        uses: actions/upload-artifact@v4
+        with:
+          name: staged-ai-runtime-audit
+          path: |
+            runtime/staged-ai-runtime.json
+            runtime/licenses/**
+          if-no-files-found: error
+          retention-days: 14

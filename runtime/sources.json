@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "platforms": {
+    "windows-x64": {
+      "components": [
+        {
+          "id": "realesrgan-ncnn-vulkan",
+          "version": "v0.2.0",
+          "archive_url": "https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases/download/v0.2.0/realesrgan-ncnn-vulkan-v0.2.0-windows.zip",
+          "sha256": null,
+          "binary": "realesrgan-ncnn-vulkan.exe",
+          "license": "MIT",
+          "license_source": "https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/blob/master/LICENSE",
+          "upstream": "https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan",
+          "redistribution_status": "approved_with_notice",
+          "model_checks": [
+            { "kind": "exact_pair", "stem": "realesrgan-x4plus" },
+            { "kind": "exact_pair", "stem": "realesrgan-x4plus-anime" },
+            { "kind": "exact_pair", "stem": "realesr-animevideov3" }
+          ]
+        },
+        {
+          "id": "realcugan-ncnn-vulkan",
+          "version": "20220728",
+          "archive_url": "https://github.com/nihui/realcugan-ncnn-vulkan/releases/download/20220728/realcugan-ncnn-vulkan-20220728-windows.zip",
+          "sha256": null,
+          "binary": "realcugan-ncnn-vulkan.exe",
+          "license": "MIT",
+          "license_source": "https://github.com/nihui/realcugan-ncnn-vulkan/blob/master/LICENSE",
+          "model_license_source": "https://github.com/bilibili/ailab/blob/main/Real-CUGAN/LICENSE",
+          "upstream": "https://github.com/nihui/realcugan-ncnn-vulkan",
+          "redistribution_status": "approved_with_notice",
+          "model_checks": [
+            { "kind": "directory_pair", "directory": "models-se" }
+          ]
+        },
+        {
+          "id": "rife-ncnn-vulkan",
+          "version": "20221029",
+          "archive_url": "https://github.com/nihui/rife-ncnn-vulkan/releases/download/20221029/rife-ncnn-vulkan-20221029-windows.zip",
+          "sha256": null,
+          "binary": "rife-ncnn-vulkan.exe",
+          "license": "MIT",
+          "license_source": "https://github.com/nihui/rife-ncnn-vulkan/blob/master/LICENSE",
+          "model_license_source": "https://github.com/hzwer/ECCV2022-RIFE/blob/main/LICENSE",
+          "upstream": "https://github.com/nihui/rife-ncnn-vulkan",
+          "redistribution_status": "approved_with_notice",
+          "model_checks": [
+            { "kind": "directory_pair", "directory": "rife-v4.6" },
+            { "kind": "directory_pair", "directory": "rife-anime" }
+          ]
+        },
+        {
+          "id": "ffmpeg",
+          "version": null,
+          "archive_url": null,
+          "sha256": null,
+          "binary": "ffmpeg.exe",
+          "license": "LGPL-2.1-or-later",
+          "license_source": "https://ffmpeg.org/legal.html",
+          "upstream": "https://ffmpeg.org/",
+          "redistribution_status": "blocked_pending_reproducible_lgpl_build",
+          "notes": "Do not stage an arbitrary prebuilt FFmpeg package. The end-user bundle must use an audited build with GPL/nonfree components disabled and preserve corresponding source/build information."
+        }
+      ]
+    }
+  }
+}

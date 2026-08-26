@@ -30,7 +30,8 @@ pub struct NcnnRuntimeInfo {
     pub realesrgan: BinaryProbe,
     pub realcugan: BinaryProbe,
     pub rife: BinaryProbe,
-    /// Model profiles that have a real on-disk `.param` + `.bin` payload pair.
+    /// Model profiles that have both a runnable engine and the exact on-disk
+    /// `.param` + `.bin` payload pair required by the profile.
     /// Keeping this field runtime-ready makes older frontends fail closed instead of
     /// enabling an AI button merely because a manifest entry exists.
     pub models: Vec<ModelManifest>,
@@ -302,36 +303,67 @@ fn model_payload_candidates(model: &ModelManifest, binary: Option<&Path>) -> Vec
     candidates
 }
 
+fn real_esrgan_payload_prefix(model: &ModelManifest) -> Option<String> {
+    if model.engine != "realesrgan-ncnn-vulkan" {
+        return None;
+    }
+
+    if model.model_stem == "realesr-animevideov3" {
+        Some(format!("{}-x{}", model.model_stem, model.scale))
+    } else {
+        Some(model.model_stem.clone())
+    }
+}
+
 pub fn resolve_ncnn_model_payload_dir(
     model: &ModelManifest,
     binary: Option<&Path>,
 ) -> Option<PathBuf> {
-    let prefix = (model.engine == "realesrgan-ncnn-vulkan").then_some(model.model_stem.as_str());
+    let prefix = real_esrgan_payload_prefix(model);
     let depth = if prefix.is_some() { 2 } else { 1 };
 
     model_payload_candidates(model, binary)
         .into_iter()
-        .find_map(|candidate| find_model_pair_directory(&candidate, prefix, depth))
+        .find_map(|candidate| find_model_pair_directory(&candidate, prefix.as_deref(), depth))
 }
 
 fn probe_model(model: &ModelManifest) -> ModelProbe {
     let binary = resolve_ncnn_binary(&model.engine);
+    let engine_available = Command::new(&binary).arg("-h").output().is_ok();
     let resolved = resolve_ncnn_model_payload_dir(model, Some(&binary));
 
-    match resolved {
-        Some(path) => ModelProbe {
+    match (engine_available, resolved) {
+        (true, Some(path)) => ModelProbe {
             id: model.id.clone(),
             available: true,
             resolved_path: Some(path.to_string_lossy().into_owned()),
-            detail: "model .param/.bin payload pair detected".into(),
+            detail: "runnable engine and exact model .param/.bin payload pair detected".into(),
         },
-        None => ModelProbe {
+        (false, Some(path)) => ModelProbe {
+            id: model.id.clone(),
+            available: false,
+            resolved_path: Some(path.to_string_lossy().into_owned()),
+            detail: format!(
+                "model payload is present but engine {} is unavailable",
+                model.engine
+            ),
+        },
+        (true, None) => ModelProbe {
             id: model.id.clone(),
             available: false,
             resolved_path: None,
             detail: format!(
-                "missing model payload for {} ({})",
-                model.display_name, model.model_stem
+                "missing exact model payload for {} ({}, scale {})",
+                model.display_name, model.model_stem, model.scale
+            ),
+        },
+        (false, None) => ModelProbe {
+            id: model.id.clone(),
+            available: false,
+            resolved_path: None,
+            detail: format!(
+                "engine {} and exact model payload for {} are unavailable",
+                model.engine, model.display_name
             ),
         },
     }
@@ -367,7 +399,8 @@ pub fn detect_ncnn_runtime() -> NcnnRuntimeInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::{direct_model_pair, find_model_pair_directory};
+    use super::{direct_model_pair, find_model_pair_directory, real_esrgan_payload_prefix};
+    use crate::core::models::ModelManifest;
     use std::{fs, path::PathBuf};
 
     fn test_root(name: &str) -> PathBuf {
@@ -376,6 +409,21 @@ mod tests {
             std::process::id(),
             name
         ))
+    }
+
+    fn anime_video_model(scale: u32) -> ModelManifest {
+        ModelManifest {
+            id: format!("realesr-animevideov3-x{scale}"),
+            display_name: format!("AnimeVideo v3 x{scale}"),
+            task: "super_resolution".into(),
+            engine: "realesrgan-ncnn-vulkan".into(),
+            scale,
+            frame_multiplier: None,
+            content: "animation".into(),
+            model_stem: "realesr-animevideov3".into(),
+            bundled: true,
+            license_status: "reviewed".into(),
+        }
     }
 
     #[test]
@@ -400,6 +448,34 @@ mod tests {
         fs::write(nested.join("flownet.param"), b"param").unwrap();
         fs::write(nested.join("flownet.bin"), b"bin").unwrap();
         assert_eq!(find_model_pair_directory(&root, None, 2), Some(nested));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn anime_video_payload_prefix_is_scale_specific() {
+        assert_eq!(
+            real_esrgan_payload_prefix(&anime_video_model(2)).as_deref(),
+            Some("realesr-animevideov3-x2")
+        );
+        assert_eq!(
+            real_esrgan_payload_prefix(&anime_video_model(4)).as_deref(),
+            Some("realesr-animevideov3-x4")
+        );
+    }
+
+    #[test]
+    fn scale_specific_pair_does_not_enable_other_anime_video_scale() {
+        let root = test_root("anime-scale");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("realesr-animevideov3-x2.param"), b"param").unwrap();
+        fs::write(root.join("realesr-animevideov3-x2.bin"), b"bin").unwrap();
+
+        let x2 = real_esrgan_payload_prefix(&anime_video_model(2)).unwrap();
+        let x4 = real_esrgan_payload_prefix(&anime_video_model(4)).unwrap();
+        assert!(direct_model_pair(&root, Some(&x2)));
+        assert!(!direct_model_pair(&root, Some(&x4)));
+
         let _ = fs::remove_dir_all(&root);
     }
 }

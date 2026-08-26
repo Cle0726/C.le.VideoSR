@@ -1,0 +1,41 @@
+html,
+body,
+#root {
+  background: transparent !important;
+}
+
+body {
+  background:
+    radial-gradient(820px 620px at 8% 8%, rgba(85, 154, 224, 0.20), transparent 62%),
+    radial-gradient(720px 520px at 87% 13%, rgba(94, 130, 183, 0.15), transparent 64%),
+    radial-gradient(560px 460px at 62% 88%, rgba(45, 105, 169, 0.12), transparent 66%),
+    linear-gradient(145deg, rgba(5, 10, 18, 0.52) 0%, rgba(9, 21, 35, 0.46) 46%, rgba(5, 10, 16, 0.54) 100%) !important;
+}
+
+/* Keep the workstation readable while allowing the OS acrylic backdrop to participate. */
+.topbar,
+.drop-panel,
+.settings-panel,
+.status-strip {
+  background-color: rgba(7, 17, 29, 0.20) !important;
+}
+
+.drop-zone {
+  background-color: rgba(5, 15, 25, 0.14) !important;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  body {
+    background: linear-gradient(145deg, #07101b, #0a1725 48%, #07101a) !important;
+  }
+
+  .topbar,
+  .drop-panel,
+  .settings-panel,
+  .status-strip,
+  .drop-zone {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background-color: rgba(8, 18, 30, 0.94) !important;
+  }
+}

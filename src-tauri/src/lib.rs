@@ -12,7 +12,7 @@ use core::interpolation::{
     InterpolationState,
     StartInterpolationResponse,
 };
-use core::media::{probe_media as inspect_media, MediaProbe};
+use core::media::{probe_media as inspect_media, validate_ai_media, MediaProbe};
 use core::ncnn::{detect_ncnn_runtime as inspect_ncnn_runtime, NcnnRuntimeInfo};
 use core::processing::{
     cancel_processing as cancel_job, start_processing as start_job, ProcessingRequest, ProcessingState,
@@ -21,8 +21,30 @@ use core::processing::{
 use core::runtime::{
     configure_managed_runtime_path, detect_media_runtime as inspect_runtime, MediaRuntimeInfo,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, State};
+
+fn validate_ai_output_path(input: &Path, output: &Path) -> Result<(), String> {
+    if input == output {
+        return Err("Output path must be different from the input video. / 输出文件不能覆盖输入视频。".into());
+    }
+    if output.file_name().is_none() {
+        return Err("Output path must include a file name. / 输出路径必须包含文件名。".into());
+    }
+    if let Some(parent) = output.parent() {
+        if !parent.as_os_str().is_empty() && !parent.is_dir() {
+            return Err("Output directory does not exist. / 输出目录不存在。".into());
+        }
+    }
+    let supported = output
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("mp4") || value.eq_ignore_ascii_case("mkv"));
+    if !supported {
+        return Err("AI output currently supports MP4 or MKV only. / AI 输出目前仅支持 MP4 或 MKV。".into());
+    }
+    Ok(())
+}
 
 #[tauri::command]
 fn detect_hardware() -> HardwareInfo {
@@ -62,8 +84,20 @@ fn cancel_processing(state: State<'_, ProcessingState>, job_id: String) -> Resul
 fn start_upscale(
     app: AppHandle,
     state: State<'_, UpscaleState>,
-    request: UpscaleRequest,
+    mut request: UpscaleRequest,
 ) -> Result<StartUpscaleResponse, String> {
+    let input = PathBuf::from(&request.input_path);
+    let output = PathBuf::from(&request.output_path);
+    validate_ai_output_path(&input, &output)?;
+
+    let probe = validate_ai_media(&input)?;
+    request.duration_seconds = probe
+        .duration_seconds
+        .ok_or_else(|| "AI processing requires a known video duration. / AI 处理需要可识别的视频时长。".to_string())?;
+    request.frame_rate = probe
+        .frame_rate
+        .ok_or_else(|| "AI processing requires a known frame rate. / AI 处理需要可识别的帧率。".to_string())?;
+
     start_ai_job(app, state, request)
 }
 
@@ -76,8 +110,26 @@ fn cancel_upscale(state: State<'_, UpscaleState>, job_id: String) -> Result<bool
 fn start_interpolation(
     app: AppHandle,
     state: State<'_, InterpolationState>,
-    request: InterpolationRequest,
+    mut request: InterpolationRequest,
 ) -> Result<StartInterpolationResponse, String> {
+    let input = PathBuf::from(&request.input_path);
+    let output = PathBuf::from(&request.output_path);
+    validate_ai_output_path(&input, &output)?;
+
+    let probe = validate_ai_media(&input)?;
+    request.duration_seconds = probe
+        .duration_seconds
+        .ok_or_else(|| "Frame interpolation requires a known duration. / 补帧需要可识别的视频时长。".to_string())?;
+    request.frame_rate = probe
+        .frame_rate
+        .ok_or_else(|| "Frame interpolation requires a known frame rate. / 补帧需要可识别的帧率。".to_string())?;
+    if request.uhd.is_none() {
+        request.uhd = Some(
+            probe.width.is_some_and(|width| width >= 3840)
+                || probe.height.is_some_and(|height| height >= 2160),
+        );
+    }
+
     start_interpolation_job(app, state, request)
 }
 

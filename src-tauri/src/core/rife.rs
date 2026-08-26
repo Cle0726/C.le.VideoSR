@@ -6,7 +6,7 @@ use std::{
 use super::{
     engine::{DirectoryCliEngine, EngineDescriptor, EngineError, EngineKind, EnhancementEngine},
     models::ModelManifest,
-    ncnn::{resolve_ncnn_binary, resolve_ncnn_model_dir},
+    ncnn::{resolve_ncnn_binary, resolve_ncnn_model_payload_dir},
 };
 
 pub struct RifeNcnnEngine {
@@ -42,9 +42,10 @@ impl RifeNcnnEngine {
         } else {
             requested
         };
+        let model_dir = resolve_ncnn_model_payload_dir(&model, Some(&resolved));
 
         Ok(Self {
-            model_dir: resolve_model_directory(&resolved, &model.model_stem),
+            model_dir,
             binary: resolved,
             model,
             gpu_id: None,
@@ -108,31 +109,14 @@ impl RifeNcnnEngine {
     }
 }
 
-fn resolve_model_directory(binary: &Path, model_stem: &str) -> Option<PathBuf> {
-    if let Some(root) = resolve_ncnn_model_dir() {
-        if root.file_name().and_then(|value| value.to_str()) == Some(model_stem) && root.is_dir() {
-            return Some(root);
-        }
-
-        let nested = root.join(model_stem);
-        if nested.is_dir() {
-            return Some(nested);
-        }
-    }
-
-    binary.parent().and_then(|parent| {
-        let candidate = parent.join(model_stem);
-        candidate.is_dir().then_some(candidate)
-    })
-}
-
 impl EnhancementEngine for RifeNcnnEngine {
     fn descriptor(&self) -> EngineDescriptor {
         EngineDescriptor {
             id: format!("rife-ncnn:{}", self.model.id),
             display_name: format!("{} · NCNN/Vulkan", self.model.display_name),
             kind: EngineKind::NcnnVulkan,
-            available: Command::new(&self.binary).arg("-h").output().is_ok(),
+            available: Command::new(&self.binary).arg("-h").output().is_ok()
+                && self.model_dir.is_some(),
             detail: Some(format!(
                 "binary={} multiplier={} gpu={} spatial_tta={} temporal_tta={} uhd={} models={}",
                 self.binary.display(),
@@ -146,12 +130,19 @@ impl EnhancementEngine for RifeNcnnEngine {
                 self.model_dir
                     .as_ref()
                     .map(|path| path.display().to_string())
-                    .unwrap_or_else(|| "engine-default".into())
+                    .unwrap_or_else(|| "missing".into())
             )),
         }
     }
 
     fn self_test(&self) -> Result<(), EngineError> {
+        if self.model_dir.is_none() {
+            return Err(EngineError::Unavailable(format!(
+                "RIFE model payload is missing for {}. / 缺少 {} 的 RIFE 模型文件。",
+                self.model.display_name, self.model.display_name
+            )));
+        }
+
         let output = Command::new(&self.binary)
             .arg("-h")
             .output()
@@ -162,8 +153,7 @@ impl EnhancementEngine for RifeNcnnEngine {
         if output.stdout.is_empty() && output.stderr.is_empty() && !output.status.success() {
             return Err(EngineError::Unavailable(format!(
                 "{} returned status {} during self-test",
-                self.binary.display(),
-                output.status
+                self.binary.display(), output.status
             )));
         }
 

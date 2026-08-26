@@ -60,12 +60,21 @@ function findPairDirectory(directory, prefix = null, depth = 2) {
   return null;
 }
 
+function realEsrganPayloadPrefix(model) {
+  // AnimeVideo v3 stores one NCNN payload pair per requested scale while the CLI
+  // still receives the shared model name via `-n realesr-animevideov3`.
+  if (model.model_stem === "realesr-animevideov3") {
+    return `${model.model_stem}-x${model.scale}`;
+  }
+  return model.model_stem;
+}
+
 function modelPayloadDirectory(model, modelDir) {
   const realEsrgan = model.engine === "realesrgan-ncnn-vulkan";
   const candidates = realEsrgan
     ? [modelDir, path.join(modelDir, model.model_stem)]
     : [path.join(modelDir, model.model_stem)];
-  const prefix = realEsrgan ? model.model_stem : null;
+  const prefix = realEsrgan ? realEsrganPayloadPrefix(model) : null;
   const depth = realEsrgan ? 2 : 1;
 
   for (const candidate of candidates) {
@@ -105,18 +114,22 @@ for (const binary of runtimeManifest.binaries ?? []) {
   });
 }
 
+const binaryById = new Map(binaryRows.map((row) => [row.component, row]));
 const modelRows = [];
 for (const model of modelManifest.models ?? []) {
   const payloadDir = modelPayloadDirectory(model, modelDir);
   const available = Boolean(payloadDir);
   const licenseReady = approved(model.license_status);
+  const engineAvailable = Boolean(binaryById.get(model.engine)?.available);
   if (strict && model.bundled && !available) strictFailures += 1;
   if (strict && model.bundled && !licenseReady) strictFailures += 1;
+  if (strict && model.bundled && !engineAvailable) strictFailures += 1;
   modelRows.push({
     model: model.id,
     engine: model.engine,
     bundled: Boolean(model.bundled),
     available,
+    engineAvailable,
     license: model.license_status ?? "unspecified",
     location: payloadDir ? path.relative(root, payloadDir) : "missing",
   });
@@ -131,7 +144,7 @@ console.log("AI model payloads:");
 console.table(modelRows);
 
 const requiredMissing = binaryRows.filter((row) => row.required && !row.available).length;
-const readyModels = modelRows.filter((row) => row.available).length;
+const readyModels = modelRows.filter((row) => row.available && row.engineAvailable).length;
 console.log(`Ready model profiles: ${readyModels}/${modelRows.length}`);
 
 if (!fs.existsSync(modelDir)) {

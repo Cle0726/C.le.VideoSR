@@ -7,7 +7,7 @@ use super::{
     engine::{DirectoryCliEngine, EngineDescriptor, EngineError, EngineKind, EnhancementEngine},
     hardware::detect_hardware_info,
     models::ModelManifest,
-    ncnn::{resolve_ncnn_binary, resolve_ncnn_model_dir},
+    ncnn::{resolve_ncnn_binary, resolve_ncnn_model_payload_dir},
 };
 
 pub struct RealCuganNcnnEngine {
@@ -42,8 +42,8 @@ impl RealCuganNcnnEngine {
         } else {
             requested
         };
+        let model_dir = resolve_ncnn_model_payload_dir(&model, Some(&resolved));
 
-        let model_dir = resolve_model_directory(&resolved, &model.model_stem);
         Ok(Self {
             binary: resolved,
             model,
@@ -103,35 +103,31 @@ impl RealCuganNcnnEngine {
     fn command(&self, input: &Path, output: &Path) -> Command {
         let mut command = Command::new(&self.binary);
         command
-            .arg("-i").arg(input)
-            .arg("-o").arg(output)
-            .arg("-n").arg(self.noise_level.to_string())
-            .arg("-s").arg(self.model.scale.to_string())
-            .arg("-t").arg(self.tile_size.to_string())
-            .arg("-c").arg(self.syncgap_mode.to_string())
-            .arg("-f").arg("png");
-        if let Some(model_dir) = &self.model_dir { command.arg("-m").arg(model_dir); }
-        if let Some(gpu_id) = self.gpu_id { command.arg("-g").arg(gpu_id.to_string()); }
-        if self.tta { command.arg("-x"); }
+            .arg("-i")
+            .arg(input)
+            .arg("-o")
+            .arg(output)
+            .arg("-n")
+            .arg(self.noise_level.to_string())
+            .arg("-s")
+            .arg(self.model.scale.to_string())
+            .arg("-t")
+            .arg(self.tile_size.to_string())
+            .arg("-c")
+            .arg(self.syncgap_mode.to_string())
+            .arg("-f")
+            .arg("png");
+        if let Some(model_dir) = &self.model_dir {
+            command.arg("-m").arg(model_dir);
+        }
+        if let Some(gpu_id) = self.gpu_id {
+            command.arg("-g").arg(gpu_id.to_string());
+        }
+        if self.tta {
+            command.arg("-x");
+        }
         command
     }
-}
-
-fn resolve_model_directory(binary: &Path, model_stem: &str) -> Option<PathBuf> {
-    if let Some(root) = resolve_ncnn_model_dir() {
-        if root.file_name().and_then(|v| v.to_str()) == Some(model_stem) && root.is_dir() {
-            return Some(root);
-        }
-        let nested = root.join(model_stem);
-        if nested.is_dir() {
-            return Some(nested);
-        }
-    }
-
-    binary.parent().and_then(|parent| {
-        let candidate = parent.join(model_stem);
-        candidate.is_dir().then_some(candidate)
-    })
 }
 
 impl EnhancementEngine for RealCuganNcnnEngine {
@@ -140,24 +136,45 @@ impl EnhancementEngine for RealCuganNcnnEngine {
             id: format!("realcugan-ncnn:{}", self.model.id),
             display_name: format!("{} · NCNN/Vulkan", self.model.display_name),
             kind: EngineKind::NcnnVulkan,
-            available: Command::new(&self.binary).arg("-h").output().is_ok(),
+            available: Command::new(&self.binary).arg("-h").output().is_ok()
+                && self.model_dir.is_some(),
             detail: Some(format!(
                 "binary={} scale={} noise={} syncgap={} tile={} gpu={} tta={} models={}",
-                self.binary.display(), self.model.scale, self.noise_level, self.syncgap_mode,
+                self.binary.display(),
+                self.model.scale,
+                self.noise_level,
+                self.syncgap_mode,
                 self.tile_size,
-                self.gpu_id.map(|v| v.to_string()).unwrap_or_else(|| "auto".into()),
+                self.gpu_id
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "auto".into()),
                 self.tta,
-                self.model_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "engine-default".into())
+                self.model_dir
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| "missing".into())
             )),
         }
     }
 
     fn self_test(&self) -> Result<(), EngineError> {
-        let output = Command::new(&self.binary).arg("-h").output()
-            .map_err(|error| EngineError::Unavailable(format!("{}: {error}", self.binary.display())))?;
+        if self.model_dir.is_none() {
+            return Err(EngineError::Unavailable(format!(
+                "Real-CUGAN model payload is missing for {}. / 缺少 {} 的 Real-CUGAN 模型文件。",
+                self.model.display_name, self.model.display_name
+            )));
+        }
+
+        let output = Command::new(&self.binary)
+            .arg("-h")
+            .output()
+            .map_err(|error| {
+                EngineError::Unavailable(format!("{}: {error}", self.binary.display()))
+            })?;
         if output.stdout.is_empty() && output.stderr.is_empty() && !output.status.success() {
             return Err(EngineError::Unavailable(format!(
-                "{} returned status {} during self-test", self.binary.display(), output.status
+                "{} returned status {} during self-test",
+                self.binary.display(), output.status
             )));
         }
         Ok(())
@@ -165,14 +182,24 @@ impl EnhancementEngine for RealCuganNcnnEngine {
 
     fn process(&self, input: &Path, output: &Path) -> Result<(), EngineError> {
         if !input.exists() {
-            return Err(EngineError::Execution(format!("input path does not exist: {}", input.display())));
+            return Err(EngineError::Execution(format!(
+                "input path does not exist: {}",
+                input.display()
+            )));
         }
         self.self_test()?;
-        let result = self.command(input, output).output()
+        let result = self
+            .command(input, output)
+            .output()
             .map_err(|error| EngineError::Execution(error.to_string()))?;
-        if result.status.success() { return Ok(()); }
+        if result.status.success() {
+            return Ok(());
+        }
         let stderr = String::from_utf8_lossy(&result.stderr);
-        let message = stderr.lines().rev().find(|line| !line.trim().is_empty())
+        let message = stderr
+            .lines()
+            .rev()
+            .find(|line| !line.trim().is_empty())
             .unwrap_or("Real-CUGAN NCNN process failed");
         Err(EngineError::Execution(message.to_string()))
     }

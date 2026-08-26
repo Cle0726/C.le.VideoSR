@@ -7,7 +7,7 @@ use super::{
     engine::{DirectoryCliEngine, EngineDescriptor, EngineError, EngineKind, EnhancementEngine},
     hardware::detect_hardware_info,
     models::ModelManifest,
-    ncnn::{resolve_ncnn_binary, resolve_ncnn_model_dir},
+    ncnn::{resolve_ncnn_binary, resolve_ncnn_model_payload_dir},
 };
 
 pub struct RealEsrganNcnnEngine {
@@ -40,11 +40,12 @@ impl RealEsrganNcnnEngine {
         } else {
             requested_binary
         };
+        let model_dir = resolve_ncnn_model_payload_dir(&model, Some(&resolved_binary));
 
         Ok(Self {
             binary: resolved_binary,
             model,
-            model_dir: resolve_ncnn_model_dir(),
+            model_dir,
             tile_size: 0,
             gpu_id: None,
             tta: false,
@@ -83,15 +84,27 @@ impl RealEsrganNcnnEngine {
     fn command(&self, input: &Path, output: &Path) -> Command {
         let mut command = Command::new(&self.binary);
         command
-            .arg("-i").arg(input)
-            .arg("-o").arg(output)
-            .arg("-s").arg(self.model.scale.to_string())
-            .arg("-t").arg(self.tile_size.to_string())
-            .arg("-n").arg(&self.model.model_stem)
-            .arg("-f").arg("png");
-        if let Some(model_dir) = &self.model_dir { command.arg("-m").arg(model_dir); }
-        if let Some(gpu_id) = self.gpu_id { command.arg("-g").arg(gpu_id.to_string()); }
-        if self.tta { command.arg("-x"); }
+            .arg("-i")
+            .arg(input)
+            .arg("-o")
+            .arg(output)
+            .arg("-s")
+            .arg(self.model.scale.to_string())
+            .arg("-t")
+            .arg(self.tile_size.to_string())
+            .arg("-n")
+            .arg(&self.model.model_stem)
+            .arg("-f")
+            .arg("png");
+        if let Some(model_dir) = &self.model_dir {
+            command.arg("-m").arg(model_dir);
+        }
+        if let Some(gpu_id) = self.gpu_id {
+            command.arg("-g").arg(gpu_id.to_string());
+        }
+        if self.tta {
+            command.arg("-x");
+        }
         command
     }
 }
@@ -102,23 +115,43 @@ impl EnhancementEngine for RealEsrganNcnnEngine {
             id: format!("realesrgan-ncnn:{}", self.model.id),
             display_name: format!("{} · NCNN/Vulkan", self.model.display_name),
             kind: EngineKind::NcnnVulkan,
-            available: Command::new(&self.binary).arg("-h").output().is_ok(),
+            available: Command::new(&self.binary).arg("-h").output().is_ok()
+                && self.model_dir.is_some(),
             detail: Some(format!(
                 "binary={} scale={} tile={} gpu={} tta={} models={}",
-                self.binary.display(), self.model.scale, self.tile_size,
-                self.gpu_id.map(|v| v.to_string()).unwrap_or_else(|| "auto".into()),
+                self.binary.display(),
+                self.model.scale,
+                self.tile_size,
+                self.gpu_id
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "auto".into()),
                 self.tta,
-                self.model_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "engine-default".into())
+                self.model_dir
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| "missing".into())
             )),
         }
     }
 
     fn self_test(&self) -> Result<(), EngineError> {
-        let output = Command::new(&self.binary).arg("-h").output()
-            .map_err(|error| EngineError::Unavailable(format!("{}: {error}", self.binary.display())))?;
+        if self.model_dir.is_none() {
+            return Err(EngineError::Unavailable(format!(
+                "Real-ESRGAN model payload is missing for {}. / 缺少 {} 的 Real-ESRGAN 模型文件。",
+                self.model.display_name, self.model.display_name
+            )));
+        }
+
+        let output = Command::new(&self.binary)
+            .arg("-h")
+            .output()
+            .map_err(|error| {
+                EngineError::Unavailable(format!("{}: {error}", self.binary.display()))
+            })?;
         if output.stdout.is_empty() && output.stderr.is_empty() && !output.status.success() {
             return Err(EngineError::Unavailable(format!(
-                "{} returned status {} during self-test", self.binary.display(), output.status
+                "{} returned status {} during self-test",
+                self.binary.display(), output.status
             )));
         }
         Ok(())
@@ -126,14 +159,24 @@ impl EnhancementEngine for RealEsrganNcnnEngine {
 
     fn process(&self, input: &Path, output: &Path) -> Result<(), EngineError> {
         if !input.exists() {
-            return Err(EngineError::Execution(format!("input path does not exist: {}", input.display())));
+            return Err(EngineError::Execution(format!(
+                "input path does not exist: {}",
+                input.display()
+            )));
         }
         self.self_test()?;
-        let result = self.command(input, output).output()
+        let result = self
+            .command(input, output)
+            .output()
             .map_err(|error| EngineError::Execution(error.to_string()))?;
-        if result.status.success() { return Ok(()); }
+        if result.status.success() {
+            return Ok(());
+        }
         let stderr = String::from_utf8_lossy(&result.stderr);
-        let message = stderr.lines().rev().find(|line| !line.trim().is_empty())
+        let message = stderr
+            .lines()
+            .rev()
+            .find(|line| !line.trim().is_empty())
             .unwrap_or("Real-ESRGAN NCNN process failed");
         Err(EngineError::Execution(message.to_string()))
     }

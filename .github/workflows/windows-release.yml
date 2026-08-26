@@ -6,9 +6,21 @@ on:
     paths:
       - ".github/workflows/windows-release.yml"
       - "src/**"
+      - "src-tauri/src/**"
       - "src-tauri/build.rs"
+      - "src-tauri/Cargo.toml"
       - "src-tauri/tauri.conf.json"
+      - "models/**"
+      - "runtime/**"
+      - "scripts/**"
+      - "package.json"
   workflow_dispatch:
+    inputs:
+      strict_runtime:
+        description: "Require complete redistribution-ready AI runtime/model bundle"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -24,7 +36,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -32,8 +44,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Validate runtime manifests
+      - name: Validate preview runtime manifests and staged payloads
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.strict_runtime != true }}
         run: npm run runtime:verify
+
+      - name: Validate complete end-user runtime bundle
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.strict_runtime == true }}
+        run: npm run runtime:verify:strict
+
+      - name: Run Rust unit tests
+        working-directory: src-tauri
+        run: cargo test --lib
 
       - name: Build Windows installer
         run: npm run tauri -- build --bundles nsis
@@ -59,9 +80,10 @@ jobs:
             Included:
             - C.le.VideoSR desktop application
             - Bilingual Chinese / English controls
-            - Blue-gray glassmorphism workstation UI
+            - Native Windows acrylic + blue-gray glass workstation UI
             - FFmpeg / NCNN runtime discovery and AI pipeline orchestration
             - Real-ESRGAN / Real-CUGAN / RIFE integration code
+            - Model payload readiness checks: a profile is runnable only when its .param/.bin payload pair is present
 
             Important preview limitation:
             Third-party FFmpeg, NCNN binaries, and AI model payloads are not bundled in this preview while redistribution licenses and notices are being finalized. The application can still be installed and launched normally, but AI processing requires compatible runtimes/models to be staged separately or available through the development PATH.

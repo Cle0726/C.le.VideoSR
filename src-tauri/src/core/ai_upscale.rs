@@ -254,42 +254,6 @@ fn encoder_command(frame_rate: f64, codec: &str, output: &Path) -> Result<Comman
     Ok(command)
 }
 
-fn mux_command(video_only: &Path, source: &Path, output: &Path) -> Command {
-    let mut command = Command::new("ffmpeg");
-    command
-        .arg("-hide_banner")
-        .arg("-loglevel")
-        .arg("error")
-        .arg("-y")
-        .arg("-i")
-        .arg(video_only)
-        .arg("-i")
-        .arg(source)
-        .arg("-map")
-        .arg("0:v:0")
-        .arg("-map")
-        .arg("1:a?")
-        .arg("-map_metadata")
-        .arg("1")
-        .arg("-c:v")
-        .arg("copy")
-        .arg("-c:a")
-        .arg("aac")
-        .arg("-b:a")
-        .arg("192k")
-        .arg("-shortest");
-
-    if output
-        .extension()
-        .and_then(|value| value.to_str())
-        .is_some_and(|value| value.eq_ignore_ascii_case("mp4"))
-    {
-        command.arg("-movflags").arg("+faststart");
-    }
-    command.arg(output);
-    command
-}
-
 fn process_video(
     app: &AppHandle,
     id: &str,
@@ -446,7 +410,7 @@ fn process_video(
         Some("Restoring source audio and metadata…".into()),
     );
     run(
-        mux_command(&video_only, input, output),
+        super::mux::build_ai_mux_command(&video_only, input, output, duration)?,
         cancel,
         "FFmpeg final mux",
     )?;

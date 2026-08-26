@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { bi, ui } from "./copy";
 
 type HardwareInfo = {
   os: string;
@@ -40,12 +41,21 @@ type BinaryProbe = {
   source: string;
 };
 
+type ModelProbe = {
+  id: string;
+  available: boolean;
+  resolved_path: string | null;
+  detail: string;
+};
+
 type NcnnRuntimeInfo = {
   realesrgan: BinaryProbe;
   realcugan: BinaryProbe;
   rife: BinaryProbe;
   model_dir: string | null;
   models: ModelManifest[];
+  model_catalog: ModelManifest[];
+  model_probes: ModelProbe[];
 };
 
 type MediaProbe = {
@@ -54,9 +64,21 @@ type MediaProbe = {
   width: number | null;
   height: number | null;
   frame_rate: number | null;
+  nominal_frame_rate: number | null;
+  frame_count: number | null;
+  variable_frame_rate: boolean;
   video_codec: string | null;
   pixel_format: string | null;
+  bits_per_raw_sample: number | null;
+  high_bit_depth: boolean;
+  hdr: boolean;
+  interlaced: boolean;
+  color_primaries: string | null;
+  color_transfer: string | null;
+  color_space: string | null;
   audio_codec: string | null;
+  subtitle_streams: number;
+  attachment_streams: number;
   container: string | null;
 };
 
@@ -77,15 +99,15 @@ type JobStatus = "idle" | ProcessingEvent["status"];
 type JobKind = "media" | "upscale" | "interpolation" | null;
 
 const modes: Array<{ id: Mode; title: string; detail: string }> = [
-  { id: "fast", title: "Fast", detail: "NCNN/Vulkan · broad GPU support" },
-  { id: "quality", title: "Quality", detail: "TensorRT / CUDA · planned" },
-  { id: "restore", title: "AI Restore", detail: "Temporal restoration · planned" },
+  { id: "fast", title: bi("极速", "Fast"), detail: bi("NCNN/Vulkan · 广泛 GPU 支持", "NCNN/Vulkan · broad GPU support") },
+  { id: "quality", title: bi("高质量", "Quality"), detail: bi("TensorRT / CUDA · 规划中", "TensorRT / CUDA · planned") },
+  { id: "restore", title: bi("AI 修复", "AI Restore"), detail: bi("时序修复 · 规划中", "Temporal restoration · planned") },
 ];
 
 const FAST_UPSCALE_ENGINES = new Set(["realesrgan-ncnn-vulkan", "realcugan-ncnn-vulkan"]);
 
 function formatDuration(seconds: number | null) {
-  if (seconds == null || !Number.isFinite(seconds)) return "Unknown";
+  if (seconds == null || !Number.isFinite(seconds)) return ui.unknown;
   const total = Math.max(0, Math.round(seconds));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
@@ -268,9 +290,7 @@ export default function App() {
         ? ncnnRuntime?.realcugan
         : null;
   const selectedEngineAvailable = Boolean(selectedEngineProbe?.available);
-  const anyFastEngineAvailable = Boolean(
-    ncnnRuntime?.realesrgan.available || ncnnRuntime?.realcugan.available || ncnnRuntime?.rife.available,
-  );
+  const anyFastModelReady = upscaleModels.length > 0 || interpolationModels.length > 0;
   const codecAvailable =
     codec === "copy" ||
     (codec === "h264" && Boolean(runtime?.libx264)) ||
@@ -279,6 +299,14 @@ export default function App() {
     codec !== "copy" &&
     ((codec === "h264" && Boolean(runtime?.libx264)) ||
       (codec === "h265" && Boolean(runtime?.libx265)));
+  const aiMediaBlockedReason = media?.variable_frame_rate
+    ? ui.vfrBlocked
+    : media?.hdr || media?.high_bit_depth
+      ? ui.hdrBlocked
+      : media?.interlaced
+        ? ui.interlacedBlocked
+        : null;
+  const outputIsMkv = outputPath?.toLowerCase().endsWith(".mkv") ?? false;
   const canRunMedia = Boolean(media && runtime?.ffmpeg_available && codecAvailable && jobStatus !== "running");
   const canRunUpscale = Boolean(
     media &&
@@ -286,6 +314,7 @@ export default function App() {
       runtime?.ffmpeg_available &&
       selectedEngineAvailable &&
       selectedModel &&
+      !aiMediaBlockedReason &&
       media.duration_seconds &&
       media.frame_rate &&
       transformedCodecAvailable &&
@@ -297,6 +326,7 @@ export default function App() {
       runtime?.ffmpeg_available &&
       ncnnRuntime?.rife.available &&
       selectedRifeModel &&
+      !aiMediaBlockedReason &&
       media.duration_seconds &&
       media.frame_rate &&
       transformedCodecAvailable &&
@@ -324,7 +354,7 @@ export default function App() {
     const target = outputPath ?? (await chooseOutput());
     if (!target) return;
 
-    beginJob("media", "Starting local FFmpeg validation pipeline…");
+    beginJob("media", bi("正在启动本地 FFmpeg 验证管线…", "Starting local FFmpeg validation pipeline…"));
 
     try {
       const response = await invoke<StartJobResponse>("start_processing", {
@@ -349,7 +379,7 @@ export default function App() {
     const target = outputPath ?? (await chooseOutput());
     if (!target) return;
 
-    beginJob("upscale", `Starting ${selectedModel.display_name}…`);
+    beginJob("upscale", bi(`正在启动 ${selectedModel.display_name}…`, `Starting ${selectedModel.display_name}…`));
 
     try {
       const response = await invoke<StartJobResponse>("start_upscale", {
@@ -387,7 +417,7 @@ export default function App() {
     const target = outputPath ?? (await chooseOutput());
     if (!target) return;
 
-    beginJob("interpolation", `Starting ${selectedRifeModel.display_name}…`);
+    beginJob("interpolation", bi(`正在启动 ${selectedRifeModel.display_name}…`, `Starting ${selectedRifeModel.display_name}…`));
 
     try {
       const response = await invoke<StartInterpolationResponse>("start_interpolation", {
@@ -407,7 +437,7 @@ export default function App() {
       });
       activeJobRef.current = response.job_id;
       setJobId(response.job_id);
-      setJobMessage(`RIFE active · target ${response.output_frame_rate.toFixed(3)} FPS`);
+      setJobMessage(bi(`RIFE 已启用 · 目标 ${response.output_frame_rate.toFixed(3)} FPS`, `RIFE active · target ${response.output_frame_rate.toFixed(3)} FPS`));
     } catch (error) {
       activeJobRef.current = null;
       setJobStatus("failed");
@@ -426,8 +456,8 @@ export default function App() {
             ? "cancel_interpolation"
             : "cancel_processing";
       const cancelled = await invoke<boolean>(command, { jobId: currentJob });
-      if (!cancelled) setJobMessage("The processing job is no longer active.");
-      else setJobMessage("Cancelling…");
+      if (!cancelled) setJobMessage(ui.inactiveJob);
+      else setJobMessage(ui.cancelling);
     } catch (error) {
       setJobMessage(String(error));
     }
@@ -440,7 +470,7 @@ export default function App() {
           <p className="eyebrow">C.le.</p>
           <h1>VideoSR</h1>
         </div>
-        <div className="local-badge">Local processing</div>
+        <div className="local-badge">{ui.localProcessing}</div>
       </header>
 
       <section className="hero-grid">
@@ -453,23 +483,23 @@ export default function App() {
                 <p className="media-path" title={media.path}>{media.path}</p>
                 <div className="media-summary">
                   <span>{media.width ?? "?"} × {media.height ?? "?"}</span>
-                  <span>{media.frame_rate ? `${media.frame_rate.toFixed(3)} FPS` : "FPS unknown"}</span>
+                  <span>{media.frame_rate ? `${media.frame_rate.toFixed(3)} FPS` : bi("帧率未知", "FPS unknown")}</span>
                   <span>{formatDuration(media.duration_seconds)}</span>
-                  <span>{media.video_codec?.toUpperCase() ?? "Codec unknown"}</span>
+                  <span>{media.video_codec?.toUpperCase() ?? bi("编码未知", "Codec unknown")}</span>
                 </div>
-                {targetResolution && <p className="target-resolution">SR target · {targetResolution}</p>}
+                {targetResolution && <p className="target-resolution">{ui.srTarget} · {targetResolution}</p>}
                 <button className="primary-button" type="button" onClick={selectVideo} disabled={probing || jobStatus === "running"}>
-                  {probing ? "Inspecting…" : "Choose another video"}
+                  {probing ? ui.inspecting : ui.chooseAnother}
                 </button>
               </>
             ) : (
               <>
-                <h2>Select a video</h2>
+                <h2>{ui.selectVideo}</h2>
                 <p>MP4 · MKV · MOV · WEBM · AVI</p>
                 <button className="primary-button" type="button" onClick={selectVideo} disabled={probing || runtime?.ffprobe_available === false}>
-                  {probing ? "Inspecting…" : "Select video"}
+                  {probing ? ui.inspecting : ui.selectVideo}
                 </button>
-                {runtime?.ffprobe_available === false && <p className="error-message">ffprobe is not available in the managed runtime or PATH.</p>}
+                {runtime?.ffprobe_available === false && <p className="error-message">{ui.ffprobeMissing}</p>}
                 {mediaError && <p className="error-message">{mediaError}</p>}
               </>
             )}
@@ -488,27 +518,27 @@ export default function App() {
                   </small>
                   <strong>
                     {jobStatus === "idle"
-                      ? anyFastEngineAvailable
-                        ? "Ready for local AI processing"
-                        : "Media pipeline ready · AI runtime missing"
+                      ? anyFastModelReady
+                        ? ui.readyAi
+                        : ui.mediaReadyAiMissing
                       : jobStatus}
                   </strong>
                 </div>
                 {jobStatus !== "idle" && <span>{progress.toFixed(1)}%</span>}
               </div>
-              <div className="progress-track" aria-label="Processing progress">
+              <div className="progress-track" aria-label={bi("处理进度", "Processing progress")}>
                 <div className="progress-fill" style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
               </div>
               <div className="job-meta">
-                <span>{formatDuration(outTime)} processed</span>
+                <span>{formatDuration(outTime)} · {ui.processed}</span>
                 <span>
                   {speed
                     ? `${speed} speed`
                     : jobKind === "upscale"
-                      ? "NCNN upscale chunks"
+                      ? bi("NCNN 超分分块", "NCNN upscale chunks")
                       : jobKind === "interpolation"
-                        ? "RIFE overlap chunks"
-                        : "Waiting for FFmpeg"}
+                        ? bi("RIFE 重叠分块", "RIFE overlap chunks")
+                        : bi("等待 FFmpeg", "Waiting for FFmpeg")}
                 </span>
                 {jobId && <span title={jobId}>{jobId.slice(-10)}</span>}
               </div>
@@ -519,8 +549,8 @@ export default function App() {
 
         <aside className="panel settings-panel">
           <div className="section-heading">
-            <span>Enhancement mode</span>
-            <small>Engine-aware</small>
+            <span>{ui.enhancementMode}</span>
+            <small>{ui.engineAware}</small>
           </div>
 
           <div className="mode-list">
@@ -541,21 +571,21 @@ export default function App() {
           {media && (
             <div className="hardware-card output-card">
               <div className="section-heading">
-                <span>Enhancement</span>
-                <small>{mode === "fast" ? "M2 + M3 · NCNN/Vulkan" : "Planned backend"}</small>
+                <span>{ui.enhancement}</span>
+                <small>{mode === "fast" ? "M2 + M3 · NCNN/Vulkan" : ui.plannedBackend}</small>
               </div>
 
               {mode === "fast" && (
                 <>
-                  <p className="subsection-title">Super resolution</p>
-                  <label className="field-label" htmlFor="model">Upscale model</label>
+                  <p className="subsection-title">{ui.superResolution}</p>
+                  <label className="field-label" htmlFor="model">{ui.upscaleModel}</label>
                   <select
                     id="model"
                     value={selectedModelId}
                     onChange={(event) => setSelectedModelId(event.target.value)}
                     disabled={jobStatus === "running" || upscaleModels.length === 0}
                   >
-                    {upscaleModels.length === 0 && <option value="">No Fast-mode upscale profiles</option>}
+                    {upscaleModels.length === 0 && <option value="">{ui.noUpscaleProfiles}</option>}
                     {upscaleModels.map((model) => (
                       <option key={model.id} value={model.id}>
                         {model.display_name} · {model.scale}× · {engineLabel(model.engine)}
@@ -564,15 +594,15 @@ export default function App() {
                   </select>
 
                   <div className="subsection-divider" />
-                  <p className="subsection-title">Frame interpolation</p>
-                  <label className="field-label" htmlFor="rife-model">RIFE model</label>
+                  <p className="subsection-title">{ui.frameInterpolation}</p>
+                  <label className="field-label" htmlFor="rife-model">{ui.rifeModel}</label>
                   <select
                     id="rife-model"
                     value={selectedRifeModelId}
                     onChange={(event) => setSelectedRifeModelId(event.target.value)}
                     disabled={jobStatus === "running" || interpolationModels.length === 0}
                   >
-                    {interpolationModels.length === 0 && <option value="">No RIFE profiles</option>}
+                    {interpolationModels.length === 0 && <option value="">{ui.noRifeProfiles}</option>}
                     {interpolationModels.map((model) => (
                       <option key={model.id} value={model.id}>
                         {model.display_name}
@@ -580,57 +610,63 @@ export default function App() {
                     ))}
                   </select>
                   <div className="interpolation-summary">
-                    <span>Target FPS</span>
-                    <strong>{targetFps ? `${targetFps.toFixed(3)} FPS` : "Unknown"}</strong>
+                    <span>{ui.targetFps}</span>
+                    <strong>{targetFps ? `${targetFps.toFixed(3)} FPS` : ui.unknown}</strong>
                   </div>
-                  <p className="pipeline-note">Scene protection · 0.42 threshold · one-frame chunk overlap</p>
+                  <p className="pipeline-note">{ui.sceneProtection}</p>
                 </>
               )}
 
               <div className="subsection-divider" />
-              <label className="field-label" htmlFor="codec">Video codec</label>
+              <label className="field-label" htmlFor="codec">{ui.videoCodec}</label>
               <select id="codec" value={codec} onChange={(event) => setCodec(event.target.value as Codec)} disabled={jobStatus === "running"}>
                 <option value="h264" disabled={runtime ? !runtime.libx264 : false}>H.264 · libx264</option>
                 <option value="h265" disabled={runtime ? !runtime.libx265 : false}>H.265 · libx265</option>
-                <option value="copy">Copy source video stream · M1 only</option>
+                <option value="copy">{ui.copyM1}</option>
               </select>
 
               <button className="path-button" type="button" onClick={chooseOutput} disabled={jobStatus === "running"}>
-                <span>{outputPath ? fileName(outputPath) : "Choose output file"}</span>
+                <span>{outputPath ? fileName(outputPath) : ui.chooseOutput}</span>
                 <small>{outputPath ?? "MP4 / MKV"}</small>
               </button>
 
               {jobStatus === "running" ? (
-                <button className="danger-button" type="button" onClick={cancelActiveJob}>Cancel processing</button>
+                <button className="danger-button" type="button" onClick={cancelActiveJob}>{ui.cancelProcessing}</button>
               ) : (
                 <div className="action-stack">
                   <button className="run-button" type="button" onClick={startUpscale} disabled={!canRunUpscale}>
-                    Enhance video · {selectedModel ? `${selectedModel.scale}×` : "NCNN"}
+                    {ui.enhanceVideo} · {selectedModel ? `${selectedModel.scale}×` : "NCNN"}
                   </button>
                   <button className="run-button interpolation-button" type="button" onClick={startInterpolation} disabled={!canRunInterpolation}>
-                    Interpolate video · {targetFps ? `${targetFps.toFixed(3)} FPS` : "RIFE"}
+                    {ui.interpolateVideo} · {targetFps ? `${targetFps.toFixed(3)} FPS` : "RIFE"}
                   </button>
                   <button className="secondary-button" type="button" onClick={startMediaProcessing} disabled={!canRunMedia}>
-                    Validate media pipeline
+                    {ui.validatePipeline}
                   </button>
                 </div>
               )}
 
-              {!runtime?.ffmpeg_available && <p className="error-message">FFmpeg is required for video processing.</p>}
+              {!runtime?.ffmpeg_available && <p className="error-message">{ui.ffmpegRequired}</p>}
               {mode === "fast" && selectedModel && !selectedEngineAvailable && (
                 <p className="error-message">
-                  {engineLabel(selectedModel.engine)} runtime is not available. Add the managed runtime payload or configure the development PATH.
+                  {bi(`${engineLabel(selectedModel.engine)} 运行时不可用，请部署托管运行时/模型或配置开发 PATH。`, `${engineLabel(selectedModel.engine)} runtime is not available. Stage the managed runtime/model payload or configure the development PATH.`)}
                 </p>
               )}
               {mode === "fast" && ncnnRuntime?.rife.available === false && (
-                <p className="error-message">RIFE runtime is not available, so frame interpolation is disabled.</p>
+                <p className="error-message">{ui.rifeMissing}</p>
               )}
               {codec === "copy" && mode === "fast" && (
-                <p className="pipeline-note">AI transforms create new video frames, so H.264 or H.265 must be selected instead of stream copy.</p>
+                <p className="pipeline-note">{ui.aiCopyUnsupported}</p>
               )}
-              {mode !== "fast" && <p className="pipeline-note">Quality and AI Restore backends are intentionally disabled until their runtimes land.</p>}
+              {mode !== "fast" && <p className="pipeline-note">{ui.plannedModes}</p>}
               {mode === "fast" && (
-                <p className="pipeline-note">Fast mode keeps bounded frame chunks on disk and uses one persistent encoder for each job.</p>
+                <p className="pipeline-note">{ui.fastPipeline}</p>
+              )}
+              {aiMediaBlockedReason && <p className="error-message">{aiMediaBlockedReason}</p>}
+              {media.subtitle_streams + media.attachment_streams > 0 && (
+                <p className="pipeline-note">
+                  {outputPath && !outputIsMkv ? ui.mp4SubtitleWarning : ui.mkvSubtitleHint}
+                </p>
               )}
             </div>
           )}
@@ -638,25 +674,28 @@ export default function App() {
           {media && (
             <div className="hardware-card">
               <div className="section-heading">
-                <span>Source</span>
+                <span>{ui.source}</span>
                 <small>ffprobe</small>
               </div>
               <dl>
-                <div><dt>Video</dt><dd>{media.video_codec ?? "Unknown"} · {media.pixel_format ?? "pixel format ?"}</dd></div>
-                <div><dt>Audio</dt><dd>{media.audio_codec ?? "None / unknown"}</dd></div>
-                <div><dt>Container</dt><dd>{media.container ?? "Unknown"}</dd></div>
+                <div><dt>{ui.video}</dt><dd>{media.video_codec ?? "Unknown"} · {media.pixel_format ?? "pixel format ?"}</dd></div>
+                <div><dt>{ui.audio}</dt><dd>{media.audio_codec ?? "None / unknown"}</dd></div>
+                <div><dt>{ui.container}</dt><dd>{media.container ?? ui.unknown}</dd></div>
+                <div><dt>{ui.frameTiming}</dt><dd>{media.variable_frame_rate ? "VFR" : "CFR"}{media.nominal_frame_rate ? ` · nominal ${media.nominal_frame_rate.toFixed(3)}` : ""}</dd></div>
+                <div><dt>{ui.colorDepth}</dt><dd>{media.hdr ? "HDR" : "SDR"} · {media.bits_per_raw_sample ? `${media.bits_per_raw_sample}-bit` : media.high_bit_depth ? ">8-bit" : "8-bit / unknown"}</dd></div>
+                <div><dt>{ui.auxiliaryStreams}</dt><dd>{media.subtitle_streams} / {media.attachment_streams}</dd></div>
               </dl>
             </div>
           )}
 
           <div className="hardware-card">
             <div className="section-heading">
-              <span>Media runtime</span>
-              <small>{runtime?.ffmpeg_available ? "Ready" : "Unavailable"}</small>
+              <span>{ui.mediaRuntime}</span>
+              <small>{runtime?.ffmpeg_available ? ui.ready : ui.unavailable}</small>
             </div>
             <dl>
-              <div><dt>FFmpeg</dt><dd>{runtime?.ffmpeg_available ? "Detected" : "Missing"}</dd></div>
-              <div><dt>ffprobe</dt><dd>{runtime?.ffprobe_available ? "Detected" : "Missing"}</dd></div>
+              <div><dt>FFmpeg</dt><dd>{runtime?.ffmpeg_available ? ui.detected : ui.missing}</dd></div>
+              <div><dt>ffprobe</dt><dd>{runtime?.ffprobe_available ? ui.detected : ui.missing}</dd></div>
               <div><dt>H.264</dt><dd>{runtime?.libx264 ? "libx264" : "Unavailable"}</dd></div>
               <div><dt>H.265</dt><dd>{runtime?.libx265 ? "libx265" : "Unavailable"}</dd></div>
             </dl>
@@ -665,7 +704,7 @@ export default function App() {
 
           <div className="hardware-card">
             <div className="section-heading">
-              <span>AI runtime</span>
+              <span>{ui.aiRuntime}</span>
               <small>M2 / M3 · managed / PATH</small>
             </div>
             <dl>
@@ -687,25 +726,25 @@ export default function App() {
                   {ncnnRuntime?.rife.available ? `Detected · ${ncnnRuntime.rife.source}` : "Not installed"}
                 </dd>
               </div>
-              <div><dt>Models</dt><dd title={ncnnRuntime?.model_dir ?? undefined}>{ncnnRuntime?.model_dir ? "Managed directory" : "Engine default / not staged"}</dd></div>
-              <div><dt>Catalog</dt><dd>{ncnnRuntime ? `${ncnnRuntime.models.length} model profiles` : "Loading"}</dd></div>
+              <div><dt>{ui.models}</dt><dd title={ncnnRuntime?.model_dir ?? undefined}>{ncnnRuntime?.model_dir ? ui.managedDirectory : ui.modelNotStaged}</dd></div>
+              <div><dt>{ui.catalog}</dt><dd>{ncnnRuntime ? `${ncnnRuntime.models.length}/${ncnnRuntime.model_catalog.length} ${bi("可运行", "ready")}` : ui.loading}</dd></div>
             </dl>
           </div>
 
           <div className="hardware-card">
             <div className="section-heading">
-              <span>System</span>
-              <small>{hardware ? "Detected" : "Checking"}</small>
+              <span>{ui.system}</span>
+              <small>{hardware ? ui.detected : ui.checking}</small>
             </div>
             {hardware ? (
               <dl>
-                <div><dt>Platform</dt><dd>{hardware.os} · {hardware.arch}</dd></div>
+                <div><dt>{ui.platform}</dt><dd>{hardware.os} · {hardware.arch}</dd></div>
                 <div><dt>CPU</dt><dd>{hardware.cpu_cores} logical cores</dd></div>
-                <div><dt>Memory</dt><dd>{Math.round(hardware.total_memory_mb / 1024)} GB</dd></div>
-                <div><dt>GPU</dt><dd>{hardware.gpu_hint ?? "NCNN will select Vulkan GPU automatically"}</dd></div>
+                <div><dt>{ui.memory}</dt><dd>{Math.round(hardware.total_memory_mb / 1024)} GB</dd></div>
+                <div><dt>GPU</dt><dd>{hardware.gpu_hint ?? ui.gpuAuto}</dd></div>
               </dl>
             ) : (
-              <p className="muted">{hardwareError ?? "Reading local capabilities…"}</p>
+              <p className="muted">{hardwareError ?? ui.readingCapabilities}</p>
             )}
           </div>
         </aside>

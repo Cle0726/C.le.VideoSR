@@ -37,7 +37,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: Validate runtime manifests and staged payloads
         run: npm run runtime:verify
@@ -47,8 +47,8 @@ jobs:
 
       - name: Check Rust core
         working-directory: src-tauri
-        run: cargo check
+        run: cargo check --locked
 
       - name: Run Rust unit tests
         working-directory: src-tauri
-        run: cargo test --lib
+        run: cargo test --lib --locked

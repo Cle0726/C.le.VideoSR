@@ -92,11 +92,6 @@ body::before {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
 }
 
-.local-badge::after {
-  content: " · 本地处理";
-  color: #b9d4ec;
-}
-
 .drop-panel {
   background:
     linear-gradient(145deg, rgba(147, 196, 237, 0.075), transparent 28%),
@@ -158,12 +153,6 @@ body::before {
   background:
     linear-gradient(180deg, rgba(196, 225, 248, 0.07), rgba(89, 139, 184, 0.035));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.085);
-}
-
-.target-resolution::before {
-  content: "超分目标 / ";
-  color: #d4eaff;
-  font-weight: 650;
 }
 
 .job-panel {
@@ -275,103 +264,7 @@ body::before {
     linear-gradient(180deg, rgba(159, 203, 238, 0.065), rgba(10, 25, 41, 0.28));
 }
 
-/* Bilingual presentation layer: Chinese first, existing English remains as the second line. */
-.settings-panel > .section-heading:first-child > span::before {
-  content: "增强模式 / ";
-  color: #eef7ff;
-}
-
-.settings-panel > .section-heading:first-child > small::before {
-  content: "引擎感知 / ";
-}
-
-.output-card > .section-heading > span::before {
-  content: "增强设置 / ";
-  color: #eef7ff;
-}
-
-.subsection-title:first-of-type::before {
-  content: "超分辨率 / ";
-}
-
-label[for="model"]::before {
-  content: "超分模型 / ";
-}
-
-label[for="rife-model"]::before {
-  content: "补帧模型 / ";
-}
-
-label[for="codec"]::before {
-  content: "视频编码 / ";
-}
-
-.interpolation-summary span::before {
-  content: "目标帧率 / ";
-}
-
-.pipeline-note:first-of-type::before {
-  content: "场景保护 / ";
-}
-
-.path-button::before {
-  content: "选择输出文件";
-  display: block;
-  margin-bottom: 2px;
-  color: #d7eaff;
-  font-size: 10px;
-  font-weight: 650;
-}
-
-.drop-zone .primary-button {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.drop-zone .primary-button::before {
-  content: "选择视频";
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.action-stack .run-button,
-.action-stack .secondary-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  line-height: 1.15;
-}
-
-.action-stack .run-button::before,
-.action-stack .secondary-button::before {
-  font-size: 12px;
-  font-weight: 700;
-  color: #eef7ff;
-}
-
-.action-stack .run-button:nth-child(1)::before {
-  content: "视频增强";
-}
-
-.action-stack .run-button:nth-child(2)::before {
-  content: "视频补帧";
-}
-
-.action-stack .secondary-button::before {
-  content: "验证媒体管线";
-}
-
-.job-panel .job-header small::before {
-  content: "处理任务 / ";
-}
-
-.job-meta > span:first-child::before {
-  content: "已处理 ";
-}
+/* Bilingual user-facing copy now lives in React/TypeScript for accessibility and testability. */
 
 /* Keep the bilingual controls compact on the narrow right rail. */
 @media (max-width: 1100px) {

@@ -14,6 +14,8 @@ on:
       - "runtime/**"
       - "scripts/**"
       - "package.json"
+      - "package-lock.json"
+      - "src-tauri/Cargo.lock"
   workflow_dispatch:
     inputs:
       strict_runtime:
@@ -42,7 +44,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: Validate preview runtime manifests and staged payloads
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.strict_runtime != true }}
@@ -54,7 +56,7 @@ jobs:
 
       - name: Run Rust unit tests
         working-directory: src-tauri
-        run: cargo test --lib
+        run: cargo test --lib --locked
 
       - name: Build Windows installer
         run: npm run tauri -- build --bundles nsis

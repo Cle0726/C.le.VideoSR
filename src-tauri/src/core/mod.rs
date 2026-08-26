@@ -5,6 +5,7 @@ pub mod interpolation;
 pub mod job;
 pub mod media;
 pub mod models;
+pub mod mux;
 pub mod ncnn;
 pub mod pipeline;
 pub mod processing;

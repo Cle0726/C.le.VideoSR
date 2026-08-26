@@ -5,6 +5,7 @@ import "./styles.css";
 import "./ai.css";
 import "./m3.css";
 import "./immersive.css";
+import "./glass.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

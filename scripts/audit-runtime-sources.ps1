@@ -32,6 +32,21 @@ function Resolve-PairInDirectory {
   return $false
 }
 
+function Show-ModelInventory {
+  param([string]$Root, [string]$ComponentId)
+
+  $params = @(Get-ChildItem -Path $Root -Recurse -File -Filter "*.param" | Sort-Object FullName)
+  Write-Host "MODEL INVENTORY $ComponentId ($($params.Count) .param files)"
+  foreach ($file in ($params | Select-Object -First 80)) {
+    $relative = $file.FullName.Substring($Root.Length).TrimStart('\', '/')
+    $paired = Test-Path ([System.IO.Path]::ChangeExtension($file.FullName, ".bin"))
+    Write-Host "  $relative paired=$paired"
+  }
+  if ($params.Count -gt 80) {
+    Write-Host "  ... truncated $($params.Count - 80) additional .param files"
+  }
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $manifestFullPath = Join-Path $repoRoot $ManifestPath
 $manifest = Get-Content -Raw -Encoding UTF8 $manifestFullPath | ConvertFrom-Json
@@ -82,6 +97,8 @@ try {
     if ($null -eq $binary) {
       throw "$($component.id) archive does not contain expected binary $($component.binary)"
     }
+
+    Show-ModelInventory -Root $componentRoot -ComponentId $component.id
 
     foreach ($check in @($component.model_checks)) {
       if ($null -eq $check) { continue }

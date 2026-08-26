@@ -7,7 +7,7 @@
           "id": "realesrgan-ncnn-vulkan",
           "version": "v0.2.5.0-portable-20220424",
           "archive_url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip",
-          "sha256": null,
+          "sha256": "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d",
           "binary": "realesrgan-ncnn-vulkan.exe",
           "license": "MIT",
           "license_source": "https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/blob/master/LICENSE",
@@ -16,7 +16,8 @@
           "model_checks": [
             { "kind": "exact_pair", "stem": "realesrgan-x4plus" },
             { "kind": "exact_pair", "stem": "realesrgan-x4plus-anime" },
-            { "kind": "exact_pair", "stem": "realesr-animevideov3" }
+            { "kind": "exact_pair", "stem": "realesr-animevideov3-x2" },
+            { "kind": "exact_pair", "stem": "realesr-animevideov3-x4" }
           ]
         },
         {

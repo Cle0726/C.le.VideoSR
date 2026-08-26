@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/windows-release.yml"
+      - "src/**"
       - "src-tauri/build.rs"
       - "src-tauri/tauri.conf.json"
   workflow_dispatch:
@@ -57,7 +58,8 @@ jobs:
 
             Included:
             - C.le.VideoSR desktop application
-            - Immersive blue-gray workstation UI
+            - Bilingual Chinese / English controls
+            - Blue-gray glassmorphism workstation UI
             - FFmpeg / NCNN runtime discovery and AI pipeline orchestration
             - Real-ESRGAN / Real-CUGAN / RIFE integration code
 

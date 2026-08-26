@@ -5,13 +5,13 @@
       "components": [
         {
           "id": "realesrgan-ncnn-vulkan",
-          "version": "v0.2.0",
-          "archive_url": "https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases/download/v0.2.0/realesrgan-ncnn-vulkan-v0.2.0-windows.zip",
+          "version": "v0.2.5.0-portable-20220424",
+          "archive_url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip",
           "sha256": null,
           "binary": "realesrgan-ncnn-vulkan.exe",
           "license": "MIT",
           "license_source": "https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/blob/master/LICENSE",
-          "upstream": "https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan",
+          "upstream": "https://github.com/xinntao/Real-ESRGAN",
           "redistribution_status": "approved_with_notice",
           "model_checks": [
             { "kind": "exact_pair", "stem": "realesrgan-x4plus" },

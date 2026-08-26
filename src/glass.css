@@ -1,0 +1,382 @@
+:root {
+  --glass-bg: rgba(12, 24, 38, 0.34);
+  --glass-bg-strong: rgba(9, 20, 34, 0.46);
+  --glass-bg-soft: rgba(110, 165, 220, 0.07);
+  --glass-edge: rgba(219, 239, 255, 0.19);
+  --glass-edge-soft: rgba(174, 211, 245, 0.11);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 26px 70px rgba(0, 0, 0, 0.33), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+/* Stronger light field so the blur is actually visible through the glass. */
+body {
+  background:
+    radial-gradient(820px 620px at 8% 8%, rgba(85, 154, 224, 0.32), transparent 62%),
+    radial-gradient(720px 520px at 87% 13%, rgba(94, 130, 183, 0.25), transparent 64%),
+    radial-gradient(560px 460px at 62% 88%, rgba(45, 105, 169, 0.20), transparent 66%),
+    linear-gradient(145deg, #050a12 0%, #091523 46%, #050a10 100%);
+}
+
+body::before {
+  opacity: 0.42;
+  background-image:
+    linear-gradient(rgba(177, 214, 247, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(177, 214, 247, 0.045) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.shell::after {
+  content: "";
+  position: fixed;
+  width: 520px;
+  height: 520px;
+  right: 21vw;
+  top: 24vh;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(92, 167, 237, 0.18), rgba(72, 128, 190, 0.07) 42%, transparent 70%);
+  filter: blur(34px);
+}
+
+/* Core glass recipe. */
+.panel,
+.topbar,
+.job-panel,
+.hardware-card,
+.mode-card,
+.media-summary span,
+.target-resolution,
+.path-button,
+.interpolation-summary,
+.output-card select,
+.status-strip {
+  -webkit-backdrop-filter: blur(30px) saturate(160%) brightness(1.06);
+  backdrop-filter: blur(30px) saturate(160%) brightness(1.06);
+}
+
+.topbar,
+.panel,
+.status-strip {
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(3, 9, 15, 0.46);
+}
+
+.topbar {
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(149, 197, 239, 0.10), transparent 34%),
+    linear-gradient(135deg, rgba(17, 34, 53, 0.43), rgba(8, 18, 31, 0.30));
+}
+
+.topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(105deg, rgba(255,255,255,0.11), transparent 22%, transparent 72%, rgba(151, 208, 255, 0.05));
+  mask-image: linear-gradient(to bottom, #000 0 44%, transparent 75%);
+}
+
+.topbar::after {
+  content: "AI 视频工作站  ·  AI VIDEO WORKSTATION  ·  本地优先 / LOCAL-FIRST";
+}
+
+.local-badge {
+  border: 1px solid rgba(197, 226, 252, 0.18);
+  background: rgba(132, 183, 229, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+
+.local-badge::after {
+  content: " · 本地处理";
+  color: #b9d4ec;
+}
+
+.drop-panel {
+  background:
+    linear-gradient(145deg, rgba(147, 196, 237, 0.075), transparent 28%),
+    linear-gradient(155deg, rgba(14, 29, 47, 0.34), rgba(5, 13, 23, 0.27));
+  border-color: rgba(208, 233, 255, 0.19);
+}
+
+.drop-panel::before {
+  background:
+    linear-gradient(122deg, rgba(255,255,255,0.11), transparent 18%, transparent 73%, rgba(111, 179, 238, 0.05));
+}
+
+.drop-zone {
+  border-color: rgba(215, 237, 255, 0.16);
+  background:
+    radial-gradient(circle at 49% 42%, rgba(86, 155, 224, 0.17), transparent 29%),
+    radial-gradient(circle at 50% 50%, transparent 0 31%, rgba(130, 191, 246, 0.07) 31.4% 31.8%, transparent 32.2%),
+    linear-gradient(148deg, rgba(18, 39, 61, 0.28), rgba(5, 14, 25, 0.31));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    inset 0 -80px 130px rgba(0,0,0,0.12),
+    0 18px 45px rgba(0,0,0,0.13);
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+  backdrop-filter: blur(24px) saturate(155%);
+}
+
+.drop-zone::after {
+  content: "";
+  position: absolute;
+  width: 42%;
+  height: 120px;
+  top: -80px;
+  left: 8%;
+  pointer-events: none;
+  border-radius: 50%;
+  background: rgba(210, 236, 255, 0.10);
+  filter: blur(40px);
+  transform: rotate(-8deg);
+}
+
+.drop-icon {
+  border: 1px solid rgba(217, 239, 255, 0.22);
+  background:
+    linear-gradient(145deg, rgba(175, 218, 255, 0.14), rgba(74, 132, 187, 0.08));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.19),
+    inset 0 -12px 24px rgba(27, 66, 103, 0.10),
+    0 16px 38px rgba(0,0,0,0.22),
+    0 0 45px rgba(82, 157, 224, 0.17);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+}
+
+.media-summary span,
+.target-resolution,
+.path-button,
+.interpolation-summary {
+  border: 1px solid rgba(207, 232, 253, 0.13);
+  background:
+    linear-gradient(180deg, rgba(196, 225, 248, 0.07), rgba(89, 139, 184, 0.035));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.085);
+}
+
+.target-resolution::before {
+  content: "超分目标 / ";
+  color: #d4eaff;
+  font-weight: 650;
+}
+
+.job-panel {
+  border: 1px solid rgba(204, 231, 254, 0.14);
+  background:
+    linear-gradient(180deg, rgba(149, 197, 235, 0.065), rgba(11, 26, 42, 0.30));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 14px 34px rgba(0,0,0,0.16);
+}
+
+.settings-panel {
+  border-color: rgba(213, 236, 255, 0.20);
+  background:
+    linear-gradient(160deg, rgba(169, 207, 239, 0.075), transparent 26%),
+    linear-gradient(180deg, rgba(18, 38, 59, 0.39), rgba(6, 17, 29, 0.32));
+  box-shadow:
+    0 30px 78px rgba(0,0,0,0.31),
+    inset 1px 1px 0 rgba(255,255,255,0.11),
+    inset -1px -1px 0 rgba(2,8,14,0.34);
+  -webkit-backdrop-filter: blur(34px) saturate(170%) brightness(1.05);
+  backdrop-filter: blur(34px) saturate(170%) brightness(1.05);
+}
+
+.settings-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(230,245,255,0.42), transparent);
+}
+
+.mode-card {
+  border: 1px solid rgba(204, 232, 254, 0.12);
+  background:
+    linear-gradient(180deg, rgba(178, 214, 244, 0.055), rgba(34, 67, 98, 0.05));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07);
+}
+
+.mode-card.active {
+  border-color: rgba(151, 205, 252, 0.31);
+  background:
+    linear-gradient(150deg, rgba(120, 184, 239, 0.22), rgba(63, 119, 169, 0.09));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    inset 0 -1px 0 rgba(8, 27, 45, 0.3),
+    0 12px 30px rgba(31, 84, 132, 0.16);
+}
+
+/* Turn diagnostics into small independent glass sheets instead of flat dividers. */
+.hardware-card {
+  margin-top: 12px;
+  padding: 13px;
+  border: 1px solid rgba(194, 224, 249, 0.095);
+  border-radius: 15px;
+  background:
+    linear-gradient(165deg, rgba(165, 205, 238, 0.045), rgba(16, 38, 58, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
+}
+
+.output-card select {
+  border: 1px solid rgba(208, 233, 253, 0.14);
+  background: rgba(7, 20, 34, 0.40);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.error-message {
+  border-color: rgba(255, 174, 174, 0.19) !important;
+  background:
+    linear-gradient(150deg, rgba(126, 39, 48, 0.16), rgba(45, 16, 26, 0.16)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
+  -webkit-backdrop-filter: blur(24px) saturate(135%);
+  backdrop-filter: blur(24px) saturate(135%);
+}
+
+.run-button,
+.secondary-button,
+.danger-button,
+.primary-button {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    0 12px 28px rgba(0,0,0,0.16);
+}
+
+.run-button {
+  background:
+    linear-gradient(145deg, rgba(103, 168, 226, 0.72), rgba(54, 105, 153, 0.62));
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+.interpolation-button {
+  background:
+    linear-gradient(145deg, rgba(80, 137, 191, 0.60), rgba(45, 89, 132, 0.54));
+}
+
+.secondary-button {
+  border-color: rgba(194, 224, 249, 0.11);
+  background: rgba(103, 155, 201, 0.055);
+}
+
+.status-strip {
+  margin-top: 14px;
+  border-radius: 17px;
+  background:
+    linear-gradient(180deg, rgba(159, 203, 238, 0.065), rgba(10, 25, 41, 0.28));
+}
+
+/* Bilingual presentation layer: Chinese first, existing English remains as the second line. */
+.settings-panel > .section-heading:first-child > span::before {
+  content: "增强模式 / ";
+  color: #eef7ff;
+}
+
+.settings-panel > .section-heading:first-child > small::before {
+  content: "引擎感知 / ";
+}
+
+.output-card > .section-heading > span::before {
+  content: "增强设置 / ";
+  color: #eef7ff;
+}
+
+.subsection-title:first-of-type::before {
+  content: "超分辨率 / ";
+}
+
+label[for="model"]::before {
+  content: "超分模型 / ";
+}
+
+label[for="rife-model"]::before {
+  content: "补帧模型 / ";
+}
+
+label[for="codec"]::before {
+  content: "视频编码 / ";
+}
+
+.interpolation-summary span::before {
+  content: "目标帧率 / ";
+}
+
+.pipeline-note:first-of-type::before {
+  content: "场景保护 / ";
+}
+
+.path-button::before {
+  content: "选择输出文件";
+  display: block;
+  margin-bottom: 2px;
+  color: #d7eaff;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.drop-zone .primary-button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.drop-zone .primary-button::before {
+  content: "选择视频";
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.action-stack .run-button,
+.action-stack .secondary-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.15;
+}
+
+.action-stack .run-button::before,
+.action-stack .secondary-button::before {
+  font-size: 12px;
+  font-weight: 700;
+  color: #eef7ff;
+}
+
+.action-stack .run-button:nth-child(1)::before {
+  content: "视频增强";
+}
+
+.action-stack .run-button:nth-child(2)::before {
+  content: "视频补帧";
+}
+
+.action-stack .secondary-button::before {
+  content: "验证媒体管线";
+}
+
+.job-panel .job-header small::before {
+  content: "处理任务 / ";
+}
+
+.job-meta > span:first-child::before {
+  content: "已处理 ";
+}
+
+/* Keep the bilingual controls compact on the narrow right rail. */
+@media (max-width: 1100px) {
+  .settings-panel {
+    -webkit-backdrop-filter: blur(28px) saturate(155%);
+    backdrop-filter: blur(28px) saturate(155%);
+  }
+}

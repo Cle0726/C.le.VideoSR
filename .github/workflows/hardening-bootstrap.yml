@@ -79,9 +79,10 @@ jobs:
             src-tauri/src/core/ai_upscale.rs \
             src-tauri/src/core/interpolation.rs \
             package-lock.json \
-            src-tauri/Cargo.lock \
             .github/workflows/ci.yml \
             .github/workflows/windows-release.yml
+          # Some runner images include a global Cargo.lock ignore rule; force-track the app lockfile.
+          git add -f src-tauri/Cargo.lock
           git diff --cached --check
           if git diff --cached --quiet; then
             echo "No hardening changes to commit."

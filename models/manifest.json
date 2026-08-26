@@ -9,8 +9,8 @@
       "scale": 4,
       "content": "general",
       "model_stem": "realesrgan-x4plus",
-      "bundled": false,
-      "license_status": "review_required"
+      "bundled": true,
+      "license_status": "reviewed"
     },
     {
       "id": "realesrgan-x4plus-anime",
@@ -20,8 +20,8 @@
       "scale": 4,
       "content": "animation",
       "model_stem": "realesrgan-x4plus-anime",
-      "bundled": false,
-      "license_status": "review_required"
+      "bundled": true,
+      "license_status": "reviewed"
     },
     {
       "id": "realesr-animevideov3-x2",
@@ -31,8 +31,8 @@
       "scale": 2,
       "content": "animation",
       "model_stem": "realesr-animevideov3",
-      "bundled": false,
-      "license_status": "review_required"
+      "bundled": true,
+      "license_status": "reviewed"
     },
     {
       "id": "realesr-animevideov3-x4",
@@ -42,8 +42,8 @@
       "scale": 4,
       "content": "animation",
       "model_stem": "realesr-animevideov3",
-      "bundled": false,
-      "license_status": "review_required"
+      "bundled": true,
+      "license_status": "reviewed"
     },
     {
       "id": "realcugan-se-x2",
@@ -53,8 +53,8 @@
       "scale": 2,
       "content": "animation",
       "model_stem": "models-se",
-      "bundled": false,
-      "license_status": "review_required"
+      "bundled": true,
+      "license_status": "reviewed"
     },
     {
       "id": "rife-v4.6-x2",
@@ -65,8 +65,8 @@
       "frame_multiplier": 2,
       "content": "general",
       "model_stem": "rife-v4.6",
-      "bundled": false,
-      "license_status": "review_required"
+      "bundled": true,
+      "license_status": "reviewed"
     },
     {
       "id": "rife-anime-x2",
@@ -77,8 +77,8 @@
       "frame_multiplier": 2,
       "content": "animation",
       "model_stem": "rife-anime",
-      "bundled": false,
-      "license_status": "review_required"
+      "bundled": true,
+      "license_status": "reviewed"
     }
   ]
 }

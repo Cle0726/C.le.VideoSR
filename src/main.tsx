@@ -6,6 +6,7 @@ import "./ai.css";
 import "./m3.css";
 import "./immersive.css";
 import "./glass.css";
+import "./native-glass.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

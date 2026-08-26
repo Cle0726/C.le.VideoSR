@@ -31,7 +31,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -39,7 +39,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Validate runtime manifests
+      - name: Validate runtime manifests and staged payloads
         run: npm run runtime:verify
 
       - name: Build frontend
@@ -48,3 +48,7 @@ jobs:
       - name: Check Rust core
         working-directory: src-tauri
         run: cargo check
+
+      - name: Run Rust unit tests
+        working-directory: src-tauri
+        run: cargo test --lib

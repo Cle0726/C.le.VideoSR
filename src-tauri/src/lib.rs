@@ -22,7 +22,7 @@ use core::runtime::{
     configure_managed_runtime_path, detect_media_runtime as inspect_runtime, MediaRuntimeInfo,
 };
 use std::path::PathBuf;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 fn detect_hardware() -> HardwareInfo {
@@ -97,6 +97,18 @@ pub fn run() {
         .manage(ProcessingState::default())
         .manage(UpscaleState::default())
         .manage(InterpolationState::default())
+        .setup(|app| {
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Err(error) = window_vibrancy::apply_acrylic(&window, None) {
+                        eprintln!("C.le.VideoSR acrylic backdrop unavailable: {error}");
+                    }
+                }
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             detect_hardware,
             detect_media_runtime,

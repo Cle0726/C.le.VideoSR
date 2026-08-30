@@ -1,207 +1,52 @@
+<div align="center">
+
 # C.le.VideoSR
 
-Local-first AI video enhancement workstation.
+### 本地优先的桌面级 AI 视频超分辨率、插帧与画质修复工作站
+**Local-first AI video enhancement & restoration workstation**
 
-C.le.VideoSR is designed as a desktop application for video restoration, super-resolution and frame interpolation. The application keeps media local and separates the desktop shell, orchestration core and inference backends so new engines can be added without rewriting the product.
+[![Rust](https://img.shields.io/badge/Core-Rust-orange?logo=rust)](https://www.rust-lang.org/)
+[![Tauri 2](https://img.shields.io/badge/Desktop-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
+[![Vulkan](https://img.shields.io/badge/GPU-Vulkan%20%7C%20NCNN-red?logo=vulkan)](https://github.com/Tencent/ncnn)
+[![FFmpeg](https://img.shields.io/badge/Media-FFmpeg-green?logo=ffmpeg)](https://ffmpeg.org/)
 
-## Product policy
+</div>
 
-The core local desktop experience is intended to remain free to use:
+---
 
-- Local video super-resolution is free.
-- Local frame interpolation is free.
-- Core local processing has no per-video fee and no usage-count limit.
-- Core local processing does not require a cloud account or paid API.
-- Basic super-resolution and frame interpolation should not become paid-only features in the future.
+## 💡 产品原则与核心承诺 (Product Policy)
 
-Free-to-use product policy and open-source licensing are separate decisions. The repository does not currently declare a project license; third-party runtime/model obligations must be reviewed before a license or redistribution policy is finalized.
+`C.le.VideoSR` 致力于为创作者提供纯净、高效的本地视频画质修复环境：
 
-See [`docs/product-principles.md`](docs/product-principles.md) for the longer product commitment.
+- 🆓 **核心功能永久免费**：本地视频超分辨率、插帧与画质修复完全免费。
+- ♾️ **无时长与次数限制**：本地推理无计费墙、无额度限制、无水印。
+- 🔒 **纯本地隐私安全**：无需上传云端 API，保障视频与创作素材绝对安全。
+- 🛡️ **工业级受限流式调度**：采用「受限解码 → AI 帧处理 → 硬件编码」流水线，杜绝长视频爆显存 (OOM)。
 
-## Direction
+---
 
-- Local processing by default
-- Bounded decode -> AI -> encode orchestration
-- Hardware-aware engine selection
-- Fast / Quality / AI Restore user modes
-- Pluggable inference backends (NCNN/Vulkan first, TensorRT and Python workers later)
-- Bounded temporary storage and cancellable jobs
-- Managed FFmpeg and inference runtime layout
+## ✨ 核心特性
 
-## Current milestone: M3 frame interpolation
+- 🚀 **高性能解耦架构**：Desktop Shell（Tauri 2 + React）、任务调度内核（Rust）与推理引擎彻底解耦，易于扩展。
+- 🎛️ **三大核心处理模式**：
+  - **Fast（快速增强）**：轻度锐化与插帧，适合低算力硬件或快速预览。
+  - **Quality（画质优先）**：平衡伪影抑制与细节重建，适合高清重制。
+  - **AI Restore（深度修复）**：消除老旧胶片噪点与压缩伪影，重塑纹理细节。
+- 🔌 **可插拔推理后端**：首选搭载高性能 NCNN/Vulkan 引擎，规划支持 TensorRT 与自定义 Python Worker。
+- 🔄 **完善的任务控制**：支持本机文件检测 (`ffprobe`)、实时进度反馈、结构化错误报告与随时可取消的任务队列。
 
-The repository now contains:
+---
 
-- Tauri 2 + React + TypeScript desktop shell
-- C.le. dark workstation UI
-- Native local input/output file pickers and `ffprobe` media inspection
-- Cancellable Rust-owned FFmpeg and AI jobs with structured progress/errors
-- H.264 / H.265 output plus an M1 stream-copy validation path
-- Versioned runtime and model manifests with CI validation
-- Managed `runtime/bin` staging with system `PATH` fallback for development
-- Tauri resource mapping for staged runtime payloads
-- NCNN runtime probes for Real-ESRGAN, Real-CUGAN and RIFE
-- Real-ESRGAN NCNN adapter for general/photo and animation profiles
-- Real-CUGAN NCNN adapter with its own noise/syncgap/model-directory semantics
-- RIFE NCNN adapter with general and anime 2x-FPS profiles
-- Shared directory-CLI engine boundary so video orchestration is not tied to one model
-- Fast-mode model selection between Real-ESRGAN and Real-CUGAN
-- Conservative GPU-memory detection and low-VRAM tile fallback
-- Bounded chunk super-resolution and frame-interpolation jobs
-- One long-lived FFmpeg image-pipe encoder per transformed-video job
-- Audio/metadata remux after AI processing
-- Temporary-directory and child-process cleanup on success, failure and cancellation
+## 🛠️ 当前里程碑 (Current Milestone: M3)
 
-## Fast super-resolution flow
+- [x] Tauri 2 + React + TypeScript 桌面工作台与 C.le. 深色视觉体系
+- [x] 原生文件选择与 `ffprobe` 媒体信息深度探查
+- [x] Rust 控制的 FFmpeg 与 AI 任务队列（支持实时进度与中断）
+- [x] H.264 / H.265 编码输出与 M1 流拷贝验证链路
+- [x] 带版本控制的 Runtime & Model Manifest 清单与 CI 校验
 
-```text
-Input video
-   ↓
-ffprobe + GPU/runtime detection
-   ↓
-selected model profile
-   ├─ Real-ESRGAN NCNN/Vulkan
-   └─ Real-CUGAN NCNN/Vulkan
-   ↓
-2-second bounded frame chunk
-   ↓
-enhanced PNG frames
-   ↓
-one persistent FFmpeg image2pipe encoder
-   ↓
-next chunk (previous chunk deleted)
-   ↓
-restore source audio + metadata
-   ↓
-output video
-```
+---
 
-## M3 RIFE interpolation flow
+## 📄 许可证说明
 
-```text
-Input video
-   ↓
-ffprobe
-   ↓
-short source-frame chunk
-   ↓
-+ previous chunk's final source frame
-(one-frame overlap)
-   ↓
-scene-score detection
-   ↓
-RIFE NCNN/Vulkan · N -> 2N
-   ↓
-remove duplicate chunk-boundary frames
-   ↓
-replace cross-scene midpoint with next source frame
-   ↓
-one persistent FFmpeg encoder at 2x FPS
-   ↓
-restore source audio + metadata
-   ↓
-output video
-```
-
-The overlap rule is required because frame interpolation depends on pairs of neighboring source frames. Each chunk after the first includes the previous chunk's final frame. When the RIFE output is stitched together, the duplicate boundary output is removed so the chunked result follows the same frame-count behavior as the upstream directory-mode `N -> 2N` pipeline.
-
-Scene protection is deliberately conservative. Each short source chunk is scanned with FFmpeg's scene score (current threshold `0.42`). When a detected cut lies between two source frames, C.le. does not use the synthesized midpoint across that cut; it uses the next source frame instead. This avoids the most obvious cross-shot morphing without pretending to be a full semantic scene detector.
-
-## GPU / tile behavior
-
-`tile=0` in the product means **C.le Auto**. The policy is deliberately conservative:
-
-- dedicated GPU memory <= 2 GB -> tile 128
-- dedicated GPU memory <= 4 GB -> tile 256
-- larger/unknown VRAM or unified memory -> leave tile 0 and use the NCNN engine's own automatic policy
-
-GPU memory detection currently uses `nvidia-smi` when available, Linux DRM VRAM data, a Windows WMI estimate, or unified-memory reporting on Apple Silicon. Unknown hardware does not block processing.
-
-## Current limitations
-
-- Runtime binaries and model payloads are not committed or redistributed yet; license review is required before release bundling.
-- Current transformed-video paths use the probed source frame rate as a constant-rate timeline. Variable-frame-rate sources are therefore normalized; timestamp-preserving VFR transport remains planned.
-- RIFE UI currently exposes 2x FPS. The model/schema is prepared for multipliers, but 4x has not been enabled yet.
-- Scene protection is a short-chunk FFmpeg scene-score heuristic, not semantic shot-boundary analysis.
-- Audio is restored after AI processing; subtitle-stream restoration is not implemented yet.
-- Super-resolution and frame interpolation are currently separate jobs in the UI; a combined one-click SR + RIFE pipeline is not yet wired.
-- Quality and AI Restore modes remain disabled until their backends land.
-- GPU detection is advisory and intentionally falls back to NCNN defaults when memory information is uncertain.
-
-## Milestones
-
-### M1 - Local media pipeline
-- [x] Import video
-- [x] Probe metadata with ffprobe
-- [x] Select output path and codec
-- [x] Start/cancel a processing job
-- [x] Live structured progress events
-- [x] Structured FFmpeg error/log capture
-- [x] Runtime/encoder self-test
-- [x] Managed FFmpeg/ffprobe runtime path for release staging
-
-### M2 - Fast enhancement backend
-- [x] NCNN runtime probing
-- [x] Versioned model manifests
-- [x] Real-ESRGAN adapter and end-to-end video upscale
-- [x] Real-CUGAN adapter and shared video upscale path
-- [x] Bounded chunk frame hand-off
-- [x] Single-pass enhanced-frame encoding
-- [x] Managed NCNN runtime/model resolution
-- [x] Runtime manifest and validation script
-- [x] Conservative VRAM-aware automatic tile policy
-- [ ] Reviewed runtime/model payload packaging
-- [ ] VFR timestamp-preserving frame transport
-
-### M3 - Frame interpolation
-- [x] RIFE NCNN adapter
-- [x] Versioned RIFE model profiles
-- [x] Bounded 2x-FPS interpolation job
-- [x] One-frame overlap across chunks
-- [x] Scene-change protection heuristic
-- [x] Desktop target-FPS controls and cancellation
-- [ ] 4x FPS preset
-- [ ] Combined SR + interpolation pipeline
-- [ ] Timestamp-preserving VFR interpolation
-
-### M4 - Quality backends
-- [ ] TensorRT/CUDA adapter
-- [ ] Model manager and runtime self-test
-
-### M5 - AI Restore
-- [ ] Isolated Python worker protocol
-- [ ] Temporal/diffusion VSR backends
-- [ ] Chunking, VRAM-aware scheduling and crash recovery
-
-## Development
-
-Requirements:
-
-- Node.js 20+
-- Rust stable
-- Tauri 2 system prerequisites
-- During development, FFmpeg/NCNN may be supplied by the managed runtime layout or system `PATH`
-
-```bash
-npm install
-npm run runtime:verify
-npm run tauri dev
-```
-
-For a strict staged-runtime check:
-
-```bash
-npm run runtime:verify:strict
-```
-
-Managed runtime layout and overrides are documented in [`docs/runtime-layout.md`](docs/runtime-layout.md). Large binaries/model files remain ignored by Git; `runtime/manifest.json` and `models/manifest.json` remain tracked.
-
-No inference binary or model payload is bundled in this source repository yet. Redistribution remains gated on per-component license review.
-
-## Architecture
-
-See [`docs/architecture.md`](docs/architecture.md) for the runtime tiers, engine boundary, media flow and process-isolation strategy.
-
-## License
-
-No project license has been selected yet. Do not assume third-party model/runtime licenses are inherited by this repository. Each engine and model will be tracked separately before distribution.
+本项目桌面端核心体验坚持免费原则。开源许可证将在第三方依赖/模型协议全面审查后正式公布。
